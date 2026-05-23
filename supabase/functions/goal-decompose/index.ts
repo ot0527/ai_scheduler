@@ -3,6 +3,7 @@ import {
   GOAL_DECOMPOSE_SYSTEM_PROMPT,
   buildGoalDecomposeUserData,
 } from "../../../packages/core/dist/ai/prompts/goal-decompose.js";
+import { AI_LIMITS } from "../../../packages/core/dist/ai/constants.js";
 import { goalDecomposeOutputSchema } from "../../../packages/core/dist/ai/schemas/goal-decompose.js";
 import { normalizeGoalDecomposeOutput } from "../../../packages/core/dist/ai/normalize-goal-decompose.js";
 import {
@@ -93,6 +94,8 @@ serve(async (req) => {
       goalDecomposeOutputSchema,
       {
         preprocess: (raw) => normalizeGoalDecomposeOutput(raw, goal.title),
+        maxOutputTokens: AI_LIMITS.goalDecomposeMaxOutputTokens,
+        maxRetries: 1,
       },
     );
 

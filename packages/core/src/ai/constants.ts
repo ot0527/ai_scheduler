@@ -7,6 +7,12 @@ export const AI_LIMITS = {
   maxTotalMinutes: 1_000_000,
   maxComponentMinutes: 500_000,
   goalDecomposePerDay: 5,
+  /** 目標分解の Gemini / OpenAI 出力トークン上限 */
+  goalDecomposeMaxOutputTokens: 8192,
+  /** プロンプト上の推奨上限（JSON 肥大化・途切れ防止） */
+  goalDecomposePromptMaxComponents: 12,
+  goalDecomposePromptMaxWorkBlocks: 24,
+  goalDecomposePromptMaxSummaryChars: 300,
 } as const;
 
 export const GOAL_CATEGORY_LABELS: Record<

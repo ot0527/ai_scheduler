@@ -12,4 +12,9 @@ export const queryKeys = {
   goals: (userId: string) => ["goals", userId] as const,
   goal: (userId: string, goalId: string) => ["goals", userId, goalId] as const,
   aiSettings: (userId: string) => ["user_ai_settings", userId] as const,
+  goalBudgets: (userId: string, periodStart: string) =>
+    ["goal_budgets", userId, periodStart] as const,
+  alerts: (userId: string) => ["alerts", userId] as const,
+  schedule: (userId: string, dateKey: string) =>
+    ["schedules", userId, dateKey] as const,
 };

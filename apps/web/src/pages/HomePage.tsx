@@ -1,19 +1,28 @@
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
+import { Link } from "react-router-dom";
 import { formatDuration, formatTimeRange } from "@ai-scheduler/core";
 import { useFreeTimeForDate } from "@/hooks/useFreeTimeForDate";
+import { useAlerts } from "@/hooks/useBudgets";
+import {
+  formatDbTime,
+  useScheduleForDate,
+} from "@/hooks/useSchedules";
 import {
   Badge,
+  Button,
   Card,
   EmptyState,
   PageHeader,
 } from "@/components/ui";
 import { DayOverridePanel } from "@/components/schedule/DayOverridePanel";
-import { Loader2 } from "lucide-react";
+import { CalendarCheck, Loader2, PieChart, Sparkles } from "lucide-react";
 
 export function HomePage() {
   const today = new Date();
   const { result: freeTimeResult, isLoading, dateKey } = useFreeTimeForDate(today);
+  const scheduleQuery = useScheduleForDate(today);
+  const alertsQuery = useAlerts();
 
   if (isLoading) {
     return (
@@ -27,15 +36,115 @@ export function HomePage() {
     freeTimeResult?.freeSlots.reduce((sum, s) => sum + s.durationMinutes, 0) ??
     0;
 
+  const schedule = scheduleQuery.data;
+  const approvedBlocks =
+    schedule?.schedule.status === "approved" ? schedule.blocks : [];
+
   return (
     <div>
       <PageHeader
         title={format(today, "M月d日（EEE）", { locale: ja })}
-        description="今日の生活リズムと空き時間を確認できます。変更があれば「今日だけ変更」から調整してください。"
+        description="今日の生活リズム・空き時間・作業予定を確認できます。"
+        action={
+          <div className="flex gap-2">
+            <Link to="/budget">
+              <Button variant="secondary">
+                <PieChart className="h-4 w-4" />
+                時間予算
+              </Button>
+            </Link>
+            <Link to="/schedule/approve">
+              <Button>
+                <Sparkles className="h-4 w-4" />
+                {schedule?.schedule.status === "draft"
+                  ? "仮予定を確認"
+                  : "予定を生成"}
+              </Button>
+            </Link>
+          </div>
+        }
       />
+
+      {alertsQuery.data && alertsQuery.data.length > 0 && (
+        <Card className="mb-6 border-amber-200 bg-amber-50/50 p-4">
+          <p className="text-sm font-medium text-amber-900">
+            {alertsQuery.data[0]?.message}
+          </p>
+          <Link
+            to="/budget"
+            className="mt-2 inline-block text-xs text-amber-800 hover:underline"
+          >
+            時間予算の詳細を見る
+          </Link>
+        </Card>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
         <div className="space-y-6">
+          <Card className="p-5">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-notion-text">
+                今日の作業予定
+              </h2>
+              {schedule && (
+                <Badge tone={schedule.schedule.status === "approved" ? "success" : "info"}>
+                  {schedule.schedule.status === "approved" ? "承認済み" : "下書き"}
+                </Badge>
+              )}
+            </div>
+
+            {scheduleQuery.isLoading ? (
+              <div className="flex justify-center py-6">
+                <Loader2 className="h-5 w-5 animate-spin text-notion-muted" />
+              </div>
+            ) : approvedBlocks.length > 0 ? (
+              <ul className="divide-y divide-notion-border">
+                {approvedBlocks.map((block) => (
+                  <li
+                    key={block.id}
+                    className="flex items-center justify-between py-3 first:pt-0 last:pb-0"
+                  >
+                    <div>
+                      <p className="text-sm font-medium text-notion-text">
+                        {block.title}
+                      </p>
+                      <p className="mt-0.5 text-xs text-notion-muted">
+                        {formatDbTime(block.start_time)} –{" "}
+                        {formatDbTime(block.end_time)}
+                      </p>
+                    </div>
+                    <Badge tone="neutral">
+                      {formatDuration(block.planned_minutes)}
+                    </Badge>
+                  </li>
+                ))}
+              </ul>
+            ) : schedule?.schedule.status === "draft" && schedule.blocks.length > 0 ? (
+              <EmptyState
+                title="仮スケジュールがあります"
+                description="内容を確認して「今日の予定に反映」してください。"
+                action={
+                  <Link to="/schedule/approve">
+                    <Button size="sm">
+                      <CalendarCheck className="h-4 w-4" />
+                      承認画面へ
+                    </Button>
+                  </Link>
+                }
+              />
+            ) : (
+              <EmptyState
+                title="今日の作業予定がありません"
+                description="時間予算を計算したうえで、今日の予定を生成できます。"
+                action={
+                  <Link to="/schedule/approve">
+                    <Button size="sm">予定を生成する</Button>
+                  </Link>
+                }
+              />
+            )}
+          </Card>
+
           <Card className="p-5">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-sm font-semibold text-notion-text">
@@ -103,31 +212,6 @@ export function HomePage() {
                     </span>
                     <span className="text-xs text-notion-muted">
                       {formatDuration(slot.durationMinutes)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
-
-          <Card className="p-5">
-            <h2 className="mb-4 text-sm font-semibold text-notion-text">
-              ブロック中の予定
-            </h2>
-            {freeTimeResult?.blockedBlocks.length === 0 ? (
-              <p className="text-sm text-notion-muted">
-                固定予定・生活リズムによるブロックはありません。
-              </p>
-            ) : (
-              <ul className="space-y-2">
-                {freeTimeResult?.blockedBlocks.map((block, index) => (
-                  <li
-                    key={`${block.label}-${index}`}
-                    className="flex items-center justify-between rounded-[4px] border border-notion-border px-3 py-2"
-                  >
-                    <span className="text-sm">{block.label}</span>
-                    <span className="text-xs text-notion-muted">
-                      {formatTimeRange(block.startMinutes, block.endMinutes)}
                     </span>
                   </li>
                 ))}

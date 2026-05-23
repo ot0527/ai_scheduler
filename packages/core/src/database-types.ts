@@ -427,6 +427,171 @@ type DefaultSchema = {
       };
       Relationships: [];
     };
+    goal_budgets: {
+      Row: {
+        id: string;
+        user_id: string;
+        goal_id: string;
+        period_start: string;
+        period_end: string;
+        required_minutes: number;
+        allocated_minutes: number;
+        completed_minutes: number;
+        status: "on_track" | "behind" | "at_risk" | "over_allocated";
+        warning_message: string | null;
+        created_at: string;
+        updated_at: string;
+      };
+      Insert: {
+        id?: string;
+        user_id: string;
+        goal_id: string;
+        period_start: string;
+        period_end: string;
+        required_minutes: number;
+        allocated_minutes: number;
+        completed_minutes?: number;
+        status?: "on_track" | "behind" | "at_risk" | "over_allocated";
+        warning_message?: string | null;
+        created_at?: string;
+        updated_at?: string;
+      };
+      Update: {
+        id?: string;
+        user_id?: string;
+        goal_id?: string;
+        period_start?: string;
+        period_end?: string;
+        required_minutes?: number;
+        allocated_minutes?: number;
+        completed_minutes?: number;
+        status?: "on_track" | "behind" | "at_risk" | "over_allocated";
+        warning_message?: string | null;
+        created_at?: string;
+        updated_at?: string;
+      };
+      Relationships: [];
+    };
+    schedules: {
+      Row: {
+        id: string;
+        user_id: string;
+        target_date: string;
+        status: "draft" | "approved" | "in_progress" | "completed" | "cancelled";
+        summary: string | null;
+        approved_at: string | null;
+        created_at: string;
+        updated_at: string;
+      };
+      Insert: {
+        id?: string;
+        user_id: string;
+        target_date: string;
+        status?: "draft" | "approved" | "in_progress" | "completed" | "cancelled";
+        summary?: string | null;
+        approved_at?: string | null;
+        created_at?: string;
+        updated_at?: string;
+      };
+      Update: {
+        id?: string;
+        user_id?: string;
+        target_date?: string;
+        status?: "draft" | "approved" | "in_progress" | "completed" | "cancelled";
+        summary?: string | null;
+        approved_at?: string | null;
+        created_at?: string;
+        updated_at?: string;
+      };
+      Relationships: [];
+    };
+    scheduled_blocks: {
+      Row: {
+        id: string;
+        schedule_id: string;
+        work_block_template_id: string | null;
+        goal_id: string;
+        component_id: string | null;
+        title: string;
+        start_time: string;
+        end_time: string;
+        planned_minutes: number;
+        actual_minutes: number;
+        status: "planned" | "done" | "partial" | "skipped" | "rescheduled";
+        selected_menu_item: string | null;
+        sort_order: number;
+        created_at: string;
+        updated_at: string;
+      };
+      Insert: {
+        id?: string;
+        schedule_id: string;
+        work_block_template_id?: string | null;
+        goal_id: string;
+        component_id?: string | null;
+        title: string;
+        start_time: string;
+        end_time: string;
+        planned_minutes: number;
+        actual_minutes?: number;
+        status?: "planned" | "done" | "partial" | "skipped" | "rescheduled";
+        selected_menu_item?: string | null;
+        sort_order?: number;
+        created_at?: string;
+        updated_at?: string;
+      };
+      Update: {
+        id?: string;
+        schedule_id?: string;
+        work_block_template_id?: string | null;
+        goal_id?: string;
+        component_id?: string | null;
+        title?: string;
+        start_time?: string;
+        end_time?: string;
+        planned_minutes?: number;
+        actual_minutes?: number;
+        status?: "planned" | "done" | "partial" | "skipped" | "rescheduled";
+        selected_menu_item?: string | null;
+        sort_order?: number;
+        created_at?: string;
+        updated_at?: string;
+      };
+      Relationships: [];
+    };
+    alerts: {
+      Row: {
+        id: string;
+        user_id: string;
+        goal_id: string | null;
+        severity: "info" | "warning" | "critical";
+        message: string;
+        suggestions: Json;
+        is_read: boolean;
+        created_at: string;
+      };
+      Insert: {
+        id?: string;
+        user_id: string;
+        goal_id?: string | null;
+        severity?: "info" | "warning" | "critical";
+        message: string;
+        suggestions?: Json;
+        is_read?: boolean;
+        created_at?: string;
+      };
+      Update: {
+        id?: string;
+        user_id?: string;
+        goal_id?: string | null;
+        severity?: "info" | "warning" | "critical";
+        message?: string;
+        suggestions?: Json;
+        is_read?: boolean;
+        created_at?: string;
+      };
+      Relationships: [];
+    };
     routine_day_overrides: {
       Row: {
         id: string;
@@ -498,6 +663,10 @@ type DefaultSchema = {
     context_switch_cost: "low" | "medium" | "high";
     ai_provider: "openai" | "gemini";
     ai_request_type: "goal_decompose" | "reschedule" | "chat" | "test_connection";
+    goal_budget_status: "on_track" | "behind" | "at_risk" | "over_allocated";
+    schedule_status: "draft" | "approved" | "in_progress" | "completed" | "cancelled";
+    scheduled_block_status: "planned" | "done" | "partial" | "skipped" | "rescheduled";
+    alert_severity: "info" | "warning" | "critical";
   };
   CompositeTypes: Record<string, never>;
 };

@@ -6,6 +6,28 @@ interface CallAIResult<T> {
   tokenUsage: TokenUsage;
 }
 
+export interface CallAIOptions {
+  preprocess?: (raw: unknown) => unknown;
+  /** 生成トークン上限（デフォルト 8192） */
+  maxOutputTokens?: number;
+  /** JSON パース失敗・出力途切れ時の再試行回数（デフォルト 1） */
+  maxRetries?: number;
+}
+
+const DEFAULT_MAX_OUTPUT_TOKENS = 8192;
+
+const RETRY_USER_HINT =
+  "前回の出力が長すぎて JSON が途中で切れました。summary は300文字以内、components 最大10件、workBlocks 最大20件に絞り、JSON のみ返してください。";
+
+function isRetriableAIError(message: string): boolean {
+  return (
+    message.includes("invalid JSON") ||
+    message.includes("MAX_TOKENS") ||
+    message.includes("途中で切れ") ||
+    message.includes("AI output validation failed")
+  );
+}
+
 /**
  * OpenAI Chat Completions API を呼び出し、JSON 出力を Zod で検証する。
  */
@@ -15,7 +37,7 @@ async function callOpenAI<T>(
   systemInstruction: string,
   userData: Record<string, unknown>,
   responseSchema: z.ZodType<T>,
-  preprocess?: (raw: unknown) => unknown,
+  options?: CallAIOptions,
 ): Promise<CallAIResult<T>> {
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -26,6 +48,7 @@ async function callOpenAI<T>(
     body: JSON.stringify({
       model,
       response_format: { type: "json_object" },
+      max_tokens: options?.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
       messages: [
         { role: "system", content: systemInstruction },
         {
@@ -44,10 +67,25 @@ async function callOpenAI<T>(
 
   const json = await response.json();
   const content = json.choices?.[0]?.message?.content;
+  const finishReason = json.choices?.[0]?.finish_reason;
   if (!content) throw new Error("OpenAI response is empty");
 
-  let parsedJson: unknown = JSON.parse(content);
-  if (preprocess) parsedJson = preprocess(parsedJson);
+  if (finishReason === "length") {
+    throw new Error(
+      "OpenAI の出力が途中で切れました（トークン上限）。もう一度お試しください。",
+    );
+  }
+
+  let parsedJson: unknown;
+  try {
+    parsedJson = JSON.parse(content);
+  } catch {
+    throw new Error(
+      `OpenAI returned invalid JSON: ${content.slice(0, 200)}`,
+    );
+  }
+
+  if (options?.preprocess) parsedJson = options.preprocess(parsedJson);
 
   const parsed = responseSchema.safeParse(parsedJson);
   if (!parsed.success) {
@@ -73,12 +111,13 @@ async function callGemini<T>(
   systemInstruction: string,
   userData: Record<string, unknown>,
   responseSchema: z.ZodType<T>,
-  preprocess?: (raw: unknown) => unknown,
+  options?: CallAIOptions,
 ): Promise<CallAIResult<T>> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
   const generationConfig: Record<string, unknown> = {
     responseMimeType: "application/json",
+    maxOutputTokens: options?.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
   };
   // Gemini 3.5 系は temperature 非推奨
   if (!model.startsWith("gemini-3.5")) {
@@ -112,22 +151,32 @@ async function callGemini<T>(
   const json = await response.json();
   const candidate = json.candidates?.[0];
   const content = candidate?.content?.parts?.[0]?.text;
+  const finishReason = candidate?.finishReason;
+
   if (!content) {
     const reason =
-      candidate?.finishReason ??
+      finishReason ??
       json.promptFeedback?.blockReason ??
       "UNKNOWN";
     throw new Error(`Gemini response is empty (${reason})`);
+  }
+
+  if (finishReason === "MAX_TOKENS") {
+    throw new Error(
+      "Gemini の出力が途中で切れました（MAX_TOKENS）。もう一度お試しください。",
+    );
   }
 
   let parsedJson: unknown;
   try {
     parsedJson = JSON.parse(content);
   } catch {
-    throw new Error(`Gemini returned invalid JSON: ${content.slice(0, 200)}`);
+    throw new Error(
+      `Gemini returned invalid JSON（出力が途中で切れた可能性があります）: ${content.slice(0, 200)}`,
+    );
   }
 
-  if (preprocess) parsedJson = preprocess(parsedJson);
+  if (options?.preprocess) parsedJson = options.preprocess(parsedJson);
 
   const parsed = responseSchema.safeParse(parsedJson);
   if (!parsed.success) {
@@ -148,6 +197,7 @@ async function callGemini<T>(
 
 /**
  * プロバイダ抽象化レイヤー。Zod 検証済みのデータを返す。
+ * JSON パース失敗・出力途切れ時は最大 1 回再試行する。
  */
 export async function callAI<T>(
   provider: AIProvider,
@@ -156,17 +206,38 @@ export async function callAI<T>(
   systemInstruction: string,
   userData: Record<string, unknown>,
   responseSchema: z.ZodType<T>,
-  options?: { preprocess?: (raw: unknown) => unknown },
+  options?: CallAIOptions,
 ): Promise<CallAIResult<T>> {
   const invoke = provider === "openai" ? callOpenAI : callGemini;
-  return invoke(
-    apiKey,
-    model,
-    systemInstruction,
-    userData,
-    responseSchema,
-    options?.preprocess,
-  );
+  const maxRetries = options?.maxRetries ?? 1;
+  let lastError: Error | undefined;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const payload =
+        attempt === 0
+          ? userData
+          : { ...userData, retryHint: RETRY_USER_HINT };
+
+      return await invoke(
+        apiKey,
+        model,
+        systemInstruction,
+        payload,
+        responseSchema,
+        options,
+      );
+    } catch (error) {
+      lastError =
+        error instanceof Error ? error : new Error("AI 呼び出しに失敗しました");
+
+      if (attempt >= maxRetries || !isRetriableAIError(lastError.message)) {
+        throw lastError;
+      }
+    }
+  }
+
+  throw lastError ?? new Error("AI 呼び出しに失敗しました");
 }
 
 /**

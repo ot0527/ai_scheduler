@@ -11,6 +11,8 @@ import { GoalFormPage } from "@/pages/GoalFormPage";
 import { GoalDetailPage } from "@/pages/GoalDetailPage";
 import { GoalDecomposePage } from "@/pages/GoalDecomposePage";
 import { AiSettingsPage } from "@/pages/AiSettingsPage";
+import { BudgetPage } from "@/pages/BudgetPage";
+import { ScheduleApprovePage } from "@/pages/ScheduleApprovePage";
 
 export default function App() {
   return (
@@ -23,6 +25,8 @@ export default function App() {
           <Route path="goals/new" element={<GoalFormPage />} />
           <Route path="goals/:id" element={<GoalDetailPage />} />
           <Route path="goals/:id/decompose" element={<GoalDecomposePage />} />
+          <Route path="budget" element={<BudgetPage />} />
+          <Route path="schedule/approve" element={<ScheduleApprovePage />} />
           <Route path="settings/preferences" element={<PreferencesPage />} />
           <Route path="settings/routines" element={<LifeRoutinesPage />} />
           <Route path="settings/fixed" element={<FixedSchedulesPage />} />
