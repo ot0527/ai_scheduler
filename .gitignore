@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+.turbo/
+*.tsbuildinfo
+
+# Vite cache
+.vite/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+apps/web/.env
+apps/web/.env.local
+
+# Supabase CLI (local)
+supabase/.branches/
+supabase/.temp/
+
+# Test coverage
+coverage/
+
+# Logs
+*.log
+pnpm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
