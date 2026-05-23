@@ -23,6 +23,7 @@ import {
   useSubmitDailyReview,
   type RecordBlockInput,
 } from "@/hooks/useExecution";
+import { useReviewHistory } from "@/hooks/usePhase5";
 import {
   Badge,
   Button,
@@ -52,6 +53,7 @@ export function ReviewPage() {
   const minorRescheduleMutation = useMinorReschedule();
   const majorPreviewMutation = useMajorReschedulePreview();
   const applyMajorMutation = useApplyMajorReschedule();
+  const reviewHistoryQuery = useReviewHistory();
 
   const [error, setError] = useState<string | null>(null);
   const [partialMinutes, setPartialMinutes] = useState<Record<string, string>>({});
@@ -431,6 +433,40 @@ export function ReviewPage() {
               <ArrowRight className="h-3.5 w-3.5" />
             </Link>
           </div>
+
+          {reviewHistoryQuery.data && reviewHistoryQuery.data.length > 0 && (
+            <Card className="p-5">
+              <h2 className="mb-4 text-sm font-semibold text-notion-text">
+                振り返り履歴
+              </h2>
+              <ul className="space-y-3">
+                {reviewHistoryQuery.data.map((entry) => (
+                  <li
+                    key={`${entry.target_date}-${entry.reviewed_at}`}
+                    className="rounded-[4px] border border-notion-border p-3 text-sm"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium text-notion-text">
+                        {format(new Date(entry.target_date), "M月d日", {
+                          locale: ja,
+                        })}
+                      </span>
+                      {entry.fatigue_level != null && (
+                        <Badge tone="neutral">
+                          疲労度: {FATIGUE_LEVEL_LABELS[entry.fatigue_level as FatigueLevel]}
+                        </Badge>
+                      )}
+                    </div>
+                    {entry.review_note && (
+                      <p className="mt-2 whitespace-pre-wrap text-notion-muted">
+                        {entry.review_note}
+                      </p>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
         </div>
       )}
     </div>

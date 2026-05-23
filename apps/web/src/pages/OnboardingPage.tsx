@@ -1,6 +1,7 @@
 import { Navigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { Tables } from "@ai-scheduler/core";
+import { DEFAULT_NOTIFICATION_SETTINGS } from "@ai-scheduler/core";
 import { useAuth } from "@/hooks/useAuth";
 import { useSetupComplete } from "@/hooks/useScheduleData";
 import { supabase } from "@/lib/supabase";
@@ -61,6 +62,7 @@ export function OnboardingPage() {
             focus_times: [],
             break_frequency_minutes: null,
             break_duration_minutes: null,
+            notification_settings: DEFAULT_NOTIFICATION_SETTINGS,
             created_at: "",
             updated_at: "",
             ...updated,

@@ -14,6 +14,7 @@ import {
 import { callAI } from "../_shared/call-ai.ts";
 import {
   checkGoalDecomposeRateLimit,
+  assertAIUsageAllowed,
   logAIRequest,
   maskSummary,
   resolveAIConfig,
@@ -61,6 +62,11 @@ serve(async (req) => {
   const allowed = await checkGoalDecomposeRateLimit(serviceClient, auth.userId);
   if (!allowed) {
     return errorResponse("本日の目標分解回数上限（5回）に達しました", 429);
+  }
+
+  const usageError = await assertAIUsageAllowed(serviceClient, auth.userId);
+  if (usageError) {
+    return errorResponse(usageError, 429);
   }
 
   const aiConfig = await resolveAIConfig(serviceClient, auth.userId);

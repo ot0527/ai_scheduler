@@ -78,6 +78,7 @@ export function useAiSettings() {
         apiKeyLast4: string | null;
         monthlyTokenLimit: number | null;
         tokensUsedThisMonth: number;
+        aiTone: "polite" | "casual" | "concise";
       }>("ai-settings", { method: "GET" });
     },
   });
@@ -134,8 +135,9 @@ export function useSaveAiSettings() {
     mutationFn: async (input: {
       provider: "openai" | "gemini";
       model: string;
-      apiKey: string;
+      apiKey?: string;
       monthlyTokenLimit?: number | null;
+      aiTone?: "polite" | "casual" | "concise";
     }) => {
       return invokeFunction("ai-settings", { body: input });
     },

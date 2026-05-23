@@ -10,6 +10,9 @@ import {
   Target,
   Bot,
   ClipboardCheck,
+  MessageCircle,
+  Shield,
+  Bell,
 } from "lucide-react";
 import { useSetupComplete } from "@/hooks/useScheduleData";
 import { cn } from "@/lib/utils";
@@ -18,11 +21,14 @@ const navItems = [
   { to: "/", label: "ホーム", icon: Home, end: true },
   { to: "/budget", label: "時間予算", icon: PieChart },
   { to: "/review", label: "振り返り", icon: ClipboardCheck },
+  { to: "/chat", label: "AI相談", icon: MessageCircle },
   { to: "/goals", label: "目標", icon: Target },
   { to: "/settings/preferences", label: "基本設定", icon: Settings2 },
   { to: "/settings/routines", label: "生活リズム", icon: Sparkles },
   { to: "/settings/fixed", label: "固定予定", icon: CalendarDays },
   { to: "/settings/ai", label: "AI設定", icon: Bot },
+  { to: "/settings/notifications", label: "通知", icon: Bell },
+  { to: "/settings/data", label: "データ管理", icon: Shield },
 ];
 
 export function AppLayout() {

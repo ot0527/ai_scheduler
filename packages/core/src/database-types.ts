@@ -49,6 +49,7 @@ type DefaultSchema = {
         sleep_time_weekend: string | null;
         break_frequency_minutes: number | null;
         break_duration_minutes: number | null;
+        notification_settings: Json;
         created_at: string;
         updated_at: string;
       };
@@ -63,6 +64,7 @@ type DefaultSchema = {
         sleep_time_weekend?: string | null;
         break_frequency_minutes?: number | null;
         break_duration_minutes?: number | null;
+        notification_settings?: Json;
         created_at?: string;
         updated_at?: string;
       };
@@ -77,6 +79,7 @@ type DefaultSchema = {
         sleep_time_weekend?: string | null;
         break_frequency_minutes?: number | null;
         break_duration_minutes?: number | null;
+        notification_settings?: Json;
         created_at?: string;
         updated_at?: string;
       };
@@ -363,6 +366,7 @@ type DefaultSchema = {
         monthly_token_limit: number | null;
         tokens_used_this_month: number;
         usage_reset_at: string;
+        ai_tone: "polite" | "casual" | "concise";
         created_at: string;
         updated_at: string;
       };
@@ -376,6 +380,7 @@ type DefaultSchema = {
         monthly_token_limit?: number | null;
         tokens_used_this_month?: number;
         usage_reset_at?: string;
+        ai_tone?: "polite" | "casual" | "concise";
         created_at?: string;
         updated_at?: string;
       };
@@ -389,6 +394,7 @@ type DefaultSchema = {
         monthly_token_limit?: number | null;
         tokens_used_this_month?: number;
         usage_reset_at?: string;
+        ai_tone?: "polite" | "casual" | "concise";
         created_at?: string;
         updated_at?: string;
       };

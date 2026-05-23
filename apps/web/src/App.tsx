@@ -14,6 +14,9 @@ import { AiSettingsPage } from "@/pages/AiSettingsPage";
 import { BudgetPage } from "@/pages/BudgetPage";
 import { ScheduleApprovePage } from "@/pages/ScheduleApprovePage";
 import { ReviewPage } from "@/pages/ReviewPage";
+import { ChatPage } from "@/pages/ChatPage";
+import { DataRightsPage } from "@/pages/DataRightsPage";
+import { NotificationSettingsPage } from "@/pages/NotificationSettingsPage";
 
 export default function App() {
   return (
@@ -29,10 +32,13 @@ export default function App() {
           <Route path="budget" element={<BudgetPage />} />
           <Route path="schedule/approve" element={<ScheduleApprovePage />} />
           <Route path="review" element={<ReviewPage />} />
+          <Route path="chat" element={<ChatPage />} />
           <Route path="settings/preferences" element={<PreferencesPage />} />
           <Route path="settings/routines" element={<LifeRoutinesPage />} />
           <Route path="settings/fixed" element={<FixedSchedulesPage />} />
           <Route path="settings/ai" element={<AiSettingsPage />} />
+          <Route path="settings/notifications" element={<NotificationSettingsPage />} />
+          <Route path="settings/data" element={<DataRightsPage />} />
         </Route>
       </Route>
 

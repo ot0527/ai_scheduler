@@ -16,6 +16,12 @@ export const AI_LIMITS = {
   reschedulePerDay: 3,
   rescheduleMaxOutputTokens: 4096,
   reschedulePromptMaxRecommendations: 5,
+  chatPerDay: 20,
+  chatMaxOutputTokens: 2048,
+  chatMaxMessageChars: 2000,
+  chatMaxReplyChars: 2000,
+  chatMaxHistoryItems: 10,
+  chatMaxSuggestedActions: 3,
 } as const;
 
 export const GOAL_CATEGORY_LABELS: Record<

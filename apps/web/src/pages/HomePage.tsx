@@ -5,9 +5,11 @@ import {
   SCHEDULED_BLOCK_STATUS_LABELS,
   formatDuration,
   formatTimeRange,
+  maskAlertMessage,
 } from "@ai-scheduler/core";
 import { useFreeTimeForDate } from "@/hooks/useFreeTimeForDate";
 import { useAlerts } from "@/hooks/useBudgets";
+import { useNotificationSettings } from "@/hooks/usePhase5";
 import {
   formatDbTime,
   useScheduleForDate,
@@ -27,6 +29,7 @@ export function HomePage() {
   const { result: freeTimeResult, isLoading, dateKey } = useFreeTimeForDate(today);
   const scheduleQuery = useScheduleForDate(today);
   const alertsQuery = useAlerts();
+  const notificationQuery = useNotificationSettings();
 
   if (isLoading) {
     return (
@@ -81,7 +84,10 @@ export function HomePage() {
       {alertsQuery.data && alertsQuery.data.length > 0 && (
         <Card className="mb-6 border-amber-200 bg-amber-50/50 p-4">
           <p className="text-sm font-medium text-amber-900">
-            {alertsQuery.data[0]?.message}
+            {maskAlertMessage(
+              alertsQuery.data[0]?.message ?? "",
+              notificationQuery.data?.showDetailedAlerts ?? false,
+            )}
           </p>
           <Link
             to="/budget"
