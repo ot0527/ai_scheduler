@@ -1,6 +1,10 @@
 import { buildScoredCandidates } from "./scoring.js";
 import type { FreeTimeResult, FreeTimeSlot } from "./types.js";
-import type { GoalBudgetContext, WorkBlockTemplateInput } from "./scoring.js";
+import type {
+  GoalBudgetContext,
+  ScoringExecutionContext,
+  WorkBlockTemplateInput,
+} from "./scoring.js";
 
 /** 配置された作業ブロック */
 export interface PlacedBlock {
@@ -30,6 +34,7 @@ export interface DailyPlacementResult {
  * @param budgets - 週次予算コンテキスト
  * @param focusTimes - 集中時間帯
  * @param todayKey - 基準日（yyyy-MM-dd）
+ * @param executionContext - 実行実績コンテキスト
  */
 export function generateDailyPlacement(
   freeTime: FreeTimeResult,
@@ -37,6 +42,7 @@ export function generateDailyPlacement(
   budgets: GoalBudgetContext[],
   focusTimes: string[],
   todayKey: string,
+  executionContext?: ScoringExecutionContext,
 ): DailyPlacementResult {
   const usedSlots = new Set<number>();
   const usedTemplates = new Set<string>();
@@ -56,6 +62,7 @@ export function generateDailyPlacement(
     budgets,
     focusTimes,
     todayKey,
+    executionContext,
   );
 
   for (const candidate of candidates) {
@@ -108,4 +115,4 @@ function fitsInSlot(slot: FreeTimeSlot, start: number, end: number): boolean {
   return start >= slot.startMinutes && end <= slot.endMinutes;
 }
 
-export type { WorkBlockTemplateInput, GoalBudgetContext };
+export type { WorkBlockTemplateInput, GoalBudgetContext, ScoringExecutionContext };

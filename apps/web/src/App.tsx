@@ -13,6 +13,7 @@ import { GoalDecomposePage } from "@/pages/GoalDecomposePage";
 import { AiSettingsPage } from "@/pages/AiSettingsPage";
 import { BudgetPage } from "@/pages/BudgetPage";
 import { ScheduleApprovePage } from "@/pages/ScheduleApprovePage";
+import { ReviewPage } from "@/pages/ReviewPage";
 
 export default function App() {
   return (
@@ -27,6 +28,7 @@ export default function App() {
           <Route path="goals/:id/decompose" element={<GoalDecomposePage />} />
           <Route path="budget" element={<BudgetPage />} />
           <Route path="schedule/approve" element={<ScheduleApprovePage />} />
+          <Route path="review" element={<ReviewPage />} />
           <Route path="settings/preferences" element={<PreferencesPage />} />
           <Route path="settings/routines" element={<LifeRoutinesPage />} />
           <Route path="settings/fixed" element={<FixedSchedulesPage />} />

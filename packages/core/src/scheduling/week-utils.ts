@@ -36,7 +36,7 @@ function startOfWeekMonday(date: Date): Date {
  * @param date - 基準日
  * @param days - 加算日数
  */
-function addDays(date: Date, days: number): Date {
+export function addDays(date: Date, days: number): Date {
   const next = new Date(date);
   next.setDate(next.getDate() + days);
   return next;

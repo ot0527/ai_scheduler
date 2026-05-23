@@ -73,6 +73,30 @@ export async function checkGoalDecomposeRateLimit(
   return (count ?? 0) < AI_LIMITS.goalDecomposePerDay;
 }
 
+/**
+ * 大規模リスケの日次レート制限を確認する。
+ */
+export async function checkRescheduleRateLimit(
+  serviceClient: SupabaseClient,
+  userId: string,
+): Promise<boolean> {
+  const since = new Date();
+  since.setHours(0, 0, 0, 0);
+
+  const { count, error } = await serviceClient
+    .from("ai_request_logs")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("request_type", "reschedule")
+    .gte("created_at", since.toISOString());
+
+  if (error) {
+    console.error("reschedule rate limit check failed:", error.message);
+    return true;
+  }
+  return (count ?? 0) < AI_LIMITS.reschedulePerDay;
+}
+
 export function maskSummary(text: string, max = 80): string {
   const trimmed = text.trim().slice(0, max);
   return trimmed.length > 0 ? `${trimmed}…` : "（空）";
@@ -82,7 +106,7 @@ export async function logAIRequest(
   serviceClient: SupabaseClient,
   params: {
     userId: string;
-    requestType: "goal_decompose" | "test_connection";
+    requestType: "goal_decompose" | "reschedule" | "test_connection";
     inputSummary: string;
     outputSummary?: string;
     provider: AIProvider;

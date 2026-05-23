@@ -26,6 +26,14 @@ export interface GoalBudgetContext {
   priority: "high" | "medium" | "low";
 }
 
+/** スコアリングの実行実績コンテキスト（Phase 4） */
+export interface ScoringExecutionContext {
+  /** 疲労度 1（元気）〜 5（かなり疲れ）。未設定時は 3 */
+  fatigueLevel?: number;
+  /** 直近完了したテンプレート ID（過去選択傾向） */
+  recentCompletedTemplateIds?: string[];
+}
+
 /** スコアリング重み（企画書 9.2 節） */
 export const SCORING_WEIGHTS = {
   budgetShortfall: 0.3,
@@ -82,6 +90,7 @@ export function fitBlockDuration(slot: FreeTimeSlot, template: WorkBlockTemplate
  * @param budget - 目標予算
  * @param focusTimes - ユーザーの集中時間帯
  * @param todayKey - 基準日
+ * @param executionContext - 実行実績コンテキスト（疲労度・過去選択）
  */
 export function scorePlacementCandidate(
   slot: FreeTimeSlot,
@@ -89,6 +98,7 @@ export function scorePlacementCandidate(
   budget: GoalBudgetContext,
   focusTimes: string[],
   todayKey: string,
+  executionContext?: ScoringExecutionContext,
 ): number {
   const duration = fitBlockDuration(slot, template);
   if (duration === 0) return 0;
@@ -125,8 +135,26 @@ export function scorePlacementCandidate(
       ? 0.2
       : 0.5;
 
-  const fatigueScore = template.energy === "low" ? 0.8 : 0.6;
-  const pastPreferenceScore = 0.5;
+  const fatigueLevel = executionContext?.fatigueLevel ?? 3;
+  const fatigueScore =
+    fatigueLevel >= 4
+      ? template.energy === "low"
+        ? 1
+        : template.energy === "medium"
+          ? 0.6
+          : 0.3
+      : fatigueLevel <= 2
+        ? template.energy === "high"
+          ? 1
+          : template.energy === "medium"
+            ? 0.7
+            : 0.5
+        : template.energy === "low"
+          ? 0.8
+          : 0.6;
+
+  const recentIds = executionContext?.recentCompletedTemplateIds ?? [];
+  const pastPreferenceScore = recentIds.includes(template.id) ? 0.9 : 0.5;
   const priorityBoost = PRIORITY_SCORE[budget.priority];
 
   const base =
@@ -159,6 +187,7 @@ export interface ScoredPlacementCandidate {
  * @param budgets - 目標予算一覧
  * @param focusTimes - 集中時間帯
  * @param todayKey - 基準日
+ * @param executionContext - 実行実績コンテキスト
  */
 export function buildScoredCandidates(
   freeSlots: FreeTimeSlot[],
@@ -166,6 +195,7 @@ export function buildScoredCandidates(
   budgets: GoalBudgetContext[],
   focusTimes: string[],
   todayKey: string,
+  executionContext?: ScoringExecutionContext,
 ): ScoredPlacementCandidate[] {
   const budgetByGoal = new Map(budgets.map((budget) => [budget.goalId, budget]));
   const candidates: ScoredPlacementCandidate[] = [];
@@ -184,6 +214,7 @@ export function buildScoredCandidates(
         budget,
         focusTimes,
         todayKey,
+        executionContext,
       );
       if (score <= 0) continue;
 

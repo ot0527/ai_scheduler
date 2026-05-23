@@ -480,6 +480,9 @@ type DefaultSchema = {
         status: "draft" | "approved" | "in_progress" | "completed" | "cancelled";
         summary: string | null;
         approved_at: string | null;
+        fatigue_level: number | null;
+        review_note: string | null;
+        reviewed_at: string | null;
         created_at: string;
         updated_at: string;
       };
@@ -490,6 +493,9 @@ type DefaultSchema = {
         status?: "draft" | "approved" | "in_progress" | "completed" | "cancelled";
         summary?: string | null;
         approved_at?: string | null;
+        fatigue_level?: number | null;
+        review_note?: string | null;
+        reviewed_at?: string | null;
         created_at?: string;
         updated_at?: string;
       };
@@ -500,6 +506,9 @@ type DefaultSchema = {
         status?: "draft" | "approved" | "in_progress" | "completed" | "cancelled";
         summary?: string | null;
         approved_at?: string | null;
+        fatigue_level?: number | null;
+        review_note?: string | null;
+        reviewed_at?: string | null;
         created_at?: string;
         updated_at?: string;
       };

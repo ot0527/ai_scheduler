@@ -1,10 +1,12 @@
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   SCHEDULE_STATUS_LABELS,
   formatMinutesLabel,
+  parseDateKey,
 } from "@ai-scheduler/core";
+import { useCancelSchedule } from "@/hooks/useExecution";
 import {
   formatDbTime,
   useApproveSchedule,
@@ -18,21 +20,28 @@ import {
   EmptyState,
   PageHeader,
 } from "@/components/ui";
-import { AlertCircle, Check, Loader2, RefreshCw } from "lucide-react";
+import { AlertCircle, Check, Loader2, RefreshCw, XCircle } from "lucide-react";
 import { useState } from "react";
 
 export function ScheduleApprovePage() {
-  const today = new Date();
+  const [searchParams] = useSearchParams();
+  const dateParam = searchParams.get("date");
+  const targetDate = dateParam ? parseDateKey(dateParam) : new Date();
   const navigate = useNavigate();
-  const scheduleQuery = useScheduleForDate(today);
+  const scheduleQuery = useScheduleForDate(targetDate);
   const generateMutation = useGenerateSchedule();
   const approveMutation = useApproveSchedule();
+  const cancelMutation = useCancelSchedule();
   const [error, setError] = useState<string | null>(null);
+
+  const dateKey =
+    dateParam ??
+    `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, "0")}-${String(targetDate.getDate()).padStart(2, "0")}`;
 
   const handleGenerate = async () => {
     setError(null);
     try {
-      await generateMutation.mutateAsync(undefined);
+      await generateMutation.mutateAsync(dateKey);
       await scheduleQuery.refetch();
     } catch (err) {
       setError(err instanceof Error ? err.message : "生成に失敗しました");
@@ -51,17 +60,52 @@ export function ScheduleApprovePage() {
     }
   };
 
+  const handleCancel = async () => {
+    const schedule = scheduleQuery.data?.schedule;
+    if (!schedule) return;
+    if (!window.confirm("承認済みの予定をキャンセルしますか？")) return;
+    setError(null);
+    try {
+      await cancelMutation.mutateAsync({
+        scheduleId: schedule.id,
+        targetDate: schedule.target_date,
+      });
+      await scheduleQuery.refetch();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "キャンセルに失敗しました");
+    }
+  };
+
   const schedule = scheduleQuery.data;
   const isDraft = schedule?.schedule.status === "draft";
-  const isApproved = schedule?.schedule.status === "approved";
+  const isApproved =
+    schedule?.schedule.status === "approved" ||
+    schedule?.schedule.status === "in_progress";
+  const isToday =
+    dateKey ===
+    `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}-${String(new Date().getDate()).padStart(2, "0")}`;
 
   return (
     <div>
       <PageHeader
-        title="今日の仮スケジュール"
-        description={format(today, "M月d日（EEE）", { locale: ja })}
+        title={isToday ? "今日の仮スケジュール" : "仮スケジュール"}
+        description={format(targetDate, "M月d日（EEE）", { locale: ja })}
         action={
           <div className="flex gap-2">
+            {isApproved && (
+              <Button
+                variant="danger"
+                onClick={handleCancel}
+                disabled={cancelMutation.isPending}
+              >
+                {cancelMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <XCircle className="h-4 w-4" />
+                )}
+                キャンセル
+              </Button>
+            )}
             <Button
               variant="secondary"
               onClick={handleGenerate}
@@ -81,7 +125,7 @@ export function ScheduleApprovePage() {
                 ) : (
                   <Check className="h-4 w-4" />
                 )}
-                今日の予定に反映
+                予定に反映
               </Button>
             )}
           </div>
@@ -101,12 +145,12 @@ export function ScheduleApprovePage() {
         </div>
       ) : !schedule ? (
         <EmptyState
-          title="今日の予定が未生成です"
-          description="空き時間と時間予算をもとに、今日の作業ブロックを仮配置します。"
+          title="予定が未生成です"
+          description="空き時間と時間予算をもとに、作業ブロックを仮配置します。"
           action={
             <div className="flex flex-col items-center gap-2">
               <Button onClick={handleGenerate} disabled={generateMutation.isPending}>
-                今日の予定を生成
+                予定を生成
               </Button>
               <Link to="/budget" className="text-xs text-notion-accent hover:underline">
                 先に時間予算を計算する
@@ -162,7 +206,7 @@ export function ScheduleApprovePage() {
 
           {isApproved && (
             <p className="text-sm text-notion-muted">
-              承認済みの予定です。
+              承認済みの予定です。再提案する場合は先にキャンセルしてください。
               <Link to="/" className="ml-1 text-notion-accent hover:underline">
                 ホームで確認
               </Link>

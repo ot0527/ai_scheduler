@@ -23,4 +23,8 @@ export * from "./ai/normalize-goal-decompose.js";
 export * from "./mappers/schedule-input.js";
 export * from "./mappers/goal.js";
 export * from "./mappers/schedule.js";
+export * from "./scheduling/execution.js";
+export * from "./scheduling/reschedule-minor.js";
+export * from "./ai/schemas/reschedule.js";
+export * from "./ai/prompts/reschedule.js";
 export type { Database, Json, Tables } from "./database-types.js";

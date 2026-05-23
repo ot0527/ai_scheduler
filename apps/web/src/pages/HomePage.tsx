@@ -1,7 +1,11 @@
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
 import { Link } from "react-router-dom";
-import { formatDuration, formatTimeRange } from "@ai-scheduler/core";
+import {
+  SCHEDULED_BLOCK_STATUS_LABELS,
+  formatDuration,
+  formatTimeRange,
+} from "@ai-scheduler/core";
 import { useFreeTimeForDate } from "@/hooks/useFreeTimeForDate";
 import { useAlerts } from "@/hooks/useBudgets";
 import {
@@ -16,7 +20,7 @@ import {
   PageHeader,
 } from "@/components/ui";
 import { DayOverridePanel } from "@/components/schedule/DayOverridePanel";
-import { CalendarCheck, Loader2, PieChart, Sparkles } from "lucide-react";
+import { CalendarCheck, ClipboardCheck, Loader2, PieChart, Sparkles } from "lucide-react";
 
 export function HomePage() {
   const today = new Date();
@@ -37,8 +41,11 @@ export function HomePage() {
     0;
 
   const schedule = scheduleQuery.data;
-  const approvedBlocks =
-    schedule?.schedule.status === "approved" ? schedule.blocks : [];
+  const workBlocks =
+    schedule &&
+    ["approved", "in_progress", "completed"].includes(schedule.schedule.status)
+      ? schedule.blocks
+      : [];
 
   return (
     <div>
@@ -51,6 +58,12 @@ export function HomePage() {
               <Button variant="secondary">
                 <PieChart className="h-4 w-4" />
                 時間予算
+              </Button>
+            </Link>
+            <Link to="/review">
+              <Button variant="secondary">
+                <ClipboardCheck className="h-4 w-4" />
+                振り返り
               </Button>
             </Link>
             <Link to="/schedule/approve">
@@ -97,9 +110,9 @@ export function HomePage() {
               <div className="flex justify-center py-6">
                 <Loader2 className="h-5 w-5 animate-spin text-notion-muted" />
               </div>
-            ) : approvedBlocks.length > 0 ? (
+            ) : workBlocks.length > 0 ? (
               <ul className="divide-y divide-notion-border">
-                {approvedBlocks.map((block) => (
+                {workBlocks.map((block) => (
                   <li
                     key={block.id}
                     className="flex items-center justify-between py-3 first:pt-0 last:pb-0"
@@ -113,9 +126,24 @@ export function HomePage() {
                         {formatDbTime(block.end_time)}
                       </p>
                     </div>
-                    <Badge tone="neutral">
-                      {formatDuration(block.planned_minutes)}
-                    </Badge>
+                    <div className="flex flex-col items-end gap-1">
+                      <Badge tone="neutral">
+                        {formatDuration(block.planned_minutes)}
+                      </Badge>
+                      {block.status !== "planned" && (
+                        <Badge
+                          tone={
+                            block.status === "done"
+                              ? "success"
+                              : block.status === "skipped"
+                                ? "warning"
+                                : "info"
+                          }
+                        >
+                          {SCHEDULED_BLOCK_STATUS_LABELS[block.status]}
+                        </Badge>
+                      )}
+                    </div>
                   </li>
                 ))}
               </ul>

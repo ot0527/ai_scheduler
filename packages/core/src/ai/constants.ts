@@ -13,6 +13,9 @@ export const AI_LIMITS = {
   goalDecomposePromptMaxComponents: 12,
   goalDecomposePromptMaxWorkBlocks: 24,
   goalDecomposePromptMaxSummaryChars: 300,
+  reschedulePerDay: 3,
+  rescheduleMaxOutputTokens: 4096,
+  reschedulePromptMaxRecommendations: 5,
 } as const;
 
 export const GOAL_CATEGORY_LABELS: Record<

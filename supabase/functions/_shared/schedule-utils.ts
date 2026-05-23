@@ -5,13 +5,22 @@ import { mapPlacedBlocksToInsertRows } from "../../../packages/core/dist/mappers
 import { buildScheduleDataSnapshot } from "../../../packages/core/dist/mappers/schedule-input.js";
 import { calculateFreeTime } from "../../../packages/core/dist/scheduling/free-time.js";
 import { generateDailyPlacement } from "../../../packages/core/dist/scheduling/placement.js";
+import {
+  needsReschedule,
+  remainingMinutesFromBlock,
+} from "../../../packages/core/dist/scheduling/execution.js";
+import {
+  planMinorReschedule,
+  type RescheduleCandidate,
+} from "../../../packages/core/dist/scheduling/reschedule-minor.js";
 import type {
   GoalBudgetContext,
+  ScoringExecutionContext,
   WorkBlockTemplateInput,
 } from "../../../packages/core/dist/scheduling/scoring.js";
 import { isValidPlacement } from "../../../packages/core/dist/scheduling/validation.js";
 import { calculateWeeklyAvailableMinutes } from "../../../packages/core/dist/scheduling/weekly-free-time.js";
-import { getWeekPeriod, toDateKey } from "../../../packages/core/dist/scheduling/week-utils.js";
+import { addDays, getWeekPeriod, parseDateKey, toDateKey } from "../../../packages/core/dist/scheduling/week-utils.js";
 
 /**
  * Edge Function 用: 指定日のスケジュール入力スナップショットを取得する。
@@ -113,6 +122,261 @@ export async function fetchActiveGoalsWithBlocks(
     goal,
     blocks: (blocks ?? []).filter((block) => block.goal_id === goal.id),
   }));
+}
+
+/**
+ * 直近の完了ブロックからスコアリング用コンテキストを取得する。
+ */
+async function fetchExecutionContext(
+  client: SupabaseClient,
+  userId: string,
+  targetDateKey: string,
+): Promise<ScoringExecutionContext> {
+  const since = toDateKey(addDays(parseDateKey(targetDateKey), -14));
+
+  const { data: recentSchedules } = await client
+    .from("schedules")
+    .select("id")
+    .eq("user_id", userId)
+    .gte("target_date", since)
+    .lte("target_date", targetDateKey);
+
+  const scheduleIds = (recentSchedules ?? []).map((schedule) => schedule.id);
+
+  let recentCompletedTemplateIds: string[] = [];
+
+  if (scheduleIds.length > 0) {
+    const { data: recentBlocks } = await client
+      .from("scheduled_blocks")
+      .select("work_block_template_id")
+      .in("schedule_id", scheduleIds)
+      .in("status", ["done", "partial"])
+      .not("work_block_template_id", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(20);
+
+    recentCompletedTemplateIds = [
+      ...new Set(
+        (recentBlocks ?? [])
+          .map((block) => block.work_block_template_id)
+          .filter((id): id is string => typeof id === "string"),
+      ),
+    ];
+  }
+
+  const { data: yesterdaySchedule } = await client
+    .from("schedules")
+    .select("fatigue_level")
+    .eq("user_id", userId)
+    .eq("target_date", toDateKey(addDays(parseDateKey(targetDateKey), -1)))
+    .maybeSingle();
+
+  return {
+    fatigueLevel: yesterdaySchedule?.fatigue_level ?? 3,
+    recentCompletedTemplateIds,
+  };
+}
+
+/**
+ * 承認済みスケジュールをキャンセルする。
+ */
+export async function cancelApprovedSchedule(
+  client: SupabaseClient,
+  userId: string,
+  scheduleId: string,
+) {
+  const { data, error } = await client
+    .from("schedules")
+    .update({ status: "cancelled", approved_at: null })
+    .eq("id", scheduleId)
+    .eq("user_id", userId)
+    .in("status", ["approved", "in_progress"])
+    .select("*")
+    .single();
+
+  if (error || !data) {
+    throw new Error("キャンセルできる承認済み予定が見つかりません");
+  }
+
+  return data;
+}
+
+/**
+ * 未完了ブロックを翌日以降へ小規模リスケする。
+ */
+export async function runMinorReschedule(
+  client: SupabaseClient,
+  userId: string,
+  sourceDate: Date,
+) {
+  const sourceDateKey = toDateKey(sourceDate);
+  const tomorrowKey = toDateKey(addDays(sourceDate, 1));
+
+  const { data: sourceSchedule, error: scheduleError } = await client
+    .from("schedules")
+    .select("id, status")
+    .eq("user_id", userId)
+    .eq("target_date", sourceDateKey)
+    .maybeSingle();
+
+  if (scheduleError) throw new Error(scheduleError.message);
+  if (!sourceSchedule) {
+    throw new Error("対象日のスケジュールが見つかりません");
+  }
+
+  const { data: blocks, error: blocksError } = await client
+    .from("scheduled_blocks")
+    .select("*")
+    .eq("schedule_id", sourceSchedule.id)
+    .order("sort_order");
+
+  if (blocksError) throw new Error(blocksError.message);
+
+  const candidates: RescheduleCandidate[] = (blocks ?? [])
+    .filter((block) =>
+      needsReschedule(block.status, block.planned_minutes, block.actual_minutes)
+    )
+    .map((block) => ({
+      sourceBlockId: block.id,
+      workBlockTemplateId: block.work_block_template_id,
+      goalId: block.goal_id,
+      componentId: block.component_id,
+      title: block.title,
+      remainingMinutes: remainingMinutesFromBlock(
+        block.planned_minutes,
+        block.actual_minutes,
+      ),
+    }));
+
+  if (candidates.length === 0) {
+    throw new Error("再配置が必要な未完了ブロックがありません");
+  }
+
+  const goalsWithBlocks = await fetchActiveGoalsWithBlocks(client, userId);
+  const templateById = new Map<string, WorkBlockTemplateInput>();
+
+  for (const { blocks: templates } of goalsWithBlocks) {
+    for (const template of templates) {
+      templateById.set(template.id, {
+        id: template.id,
+        goalId: template.goal_id,
+        componentId: template.component_id,
+        title: template.title,
+        minMinutes: template.min_minutes,
+        idealMinutes: template.ideal_minutes,
+        maxMinutes: template.max_minutes,
+        energy: template.energy,
+        preferredTime: template.preferred_time,
+        requiresDeepWork: template.requires_deep_work,
+        orderType: template.order_type,
+      });
+    }
+  }
+
+  const plan = await planMinorReschedule(
+    candidates,
+    async (dateKey) => {
+      const snapshot = await fetchScheduleSnapshot(
+        client,
+        userId,
+        parseDateKey(dateKey),
+      );
+      return calculateFreeTime({ ...snapshot, date: parseDateKey(dateKey) });
+    },
+    (candidate) =>
+      candidate.workBlockTemplateId
+        ? templateById.get(candidate.workBlockTemplateId) ?? null
+        : null,
+    { startDateKey: tomorrowKey, maxDays: 7 },
+  );
+
+  if (plan.placements.length === 0) {
+    throw new Error("再配置先の空き時間が見つかりませんでした");
+  }
+
+  for (const placement of plan.placements) {
+    await client
+      .from("scheduled_blocks")
+      .update({ status: "rescheduled" })
+      .eq("id", placement.candidate.sourceBlockId);
+  }
+
+  const results: Array<{ targetDate: string; scheduleId: string; blockCount: number }> =
+    [];
+
+  const placementsByDate = new Map<string, typeof plan.placements>();
+  for (const placement of plan.placements) {
+    const list = placementsByDate.get(placement.targetDateKey) ?? [];
+    list.push(placement);
+    placementsByDate.set(placement.targetDateKey, list);
+  }
+
+  for (const [targetDateKey, datePlacements] of placementsByDate) {
+    const { data: existing } = await client
+      .from("schedules")
+      .select("id, status")
+      .eq("user_id", userId)
+      .eq("target_date", targetDateKey)
+      .maybeSingle();
+
+    if (existing?.status === "approved") {
+      continue;
+    }
+
+    const summary = `${datePlacements.length} 件の再配置案`;
+
+    let scheduleId = existing?.id;
+
+    if (scheduleId) {
+      await client.from("scheduled_blocks").delete().eq("schedule_id", scheduleId);
+      await client
+        .from("schedules")
+        .update({ status: "draft", summary, approved_at: null })
+        .eq("id", scheduleId);
+    } else {
+      const { data: inserted, error: insertError } = await client
+        .from("schedules")
+        .insert({
+          user_id: userId,
+          target_date: targetDateKey,
+          status: "draft",
+          summary,
+        })
+        .select("id")
+        .single();
+
+      if (insertError || !inserted) {
+        throw new Error(insertError?.message ?? "再配置スケジュールの保存に失敗しました");
+      }
+      scheduleId = inserted.id;
+    }
+
+    const blockRows = mapPlacedBlocksToInsertRows(
+      scheduleId!,
+      datePlacements.map((item) => item.block),
+    );
+
+    if (blockRows.length > 0) {
+      const { error: insertBlocksError } = await client
+        .from("scheduled_blocks")
+        .insert(blockRows);
+      if (insertBlocksError) throw new Error(insertBlocksError.message);
+    }
+
+    results.push({
+      targetDate: targetDateKey,
+      scheduleId: scheduleId!,
+      blockCount: blockRows.length,
+    });
+  }
+
+  return {
+    sourceDate: sourceDateKey,
+    placedCount: plan.placements.length,
+    unplacedCount: plan.unplaced.length,
+    proposals: results,
+    unplaced: plan.unplaced.map((item) => item.title),
+  };
 }
 
 /**
@@ -252,12 +516,15 @@ export async function runScheduleGeneration(
     .eq("user_id", userId)
     .single();
 
+  const executionContext = await fetchExecutionContext(client, userId, dateKey);
+
   const placement = generateDailyPlacement(
     freeTime,
     templates,
     budgetContexts,
     prefsRes.data?.focus_times ?? [],
     dateKey,
+    executionContext,
   );
 
   if (!isValidPlacement(freeTime, placement.blocks)) {
