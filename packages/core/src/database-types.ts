@@ -169,6 +169,264 @@ type DefaultSchema = {
       };
       Relationships: [];
     };
+    goals: {
+      Row: {
+        id: string;
+        user_id: string;
+        title: string;
+        category:
+          | "study"
+          | "creative"
+          | "exercise"
+          | "work"
+          | "side_business"
+          | "household"
+          | "other";
+        deadline: string;
+        current_status: string | null;
+        target_condition: string;
+        priority: "high" | "medium" | "low";
+        weekly_available_minutes: number;
+        avoid_time_slots: string[];
+        estimated_total_minutes: number | null;
+        completed_minutes: number;
+        feasibility: "possible" | "challenging" | "unlikely" | null;
+        ai_summary: string | null;
+        status: "draft" | "active" | "completed" | "archived";
+        created_at: string;
+        updated_at: string;
+      };
+      Insert: {
+        id?: string;
+        user_id: string;
+        title: string;
+        category?:
+          | "study"
+          | "creative"
+          | "exercise"
+          | "work"
+          | "side_business"
+          | "household"
+          | "other";
+        deadline: string;
+        current_status?: string | null;
+        target_condition: string;
+        priority?: "high" | "medium" | "low";
+        weekly_available_minutes?: number;
+        avoid_time_slots?: string[];
+        estimated_total_minutes?: number | null;
+        completed_minutes?: number;
+        feasibility?: "possible" | "challenging" | "unlikely" | null;
+        ai_summary?: string | null;
+        status?: "draft" | "active" | "completed" | "archived";
+        created_at?: string;
+        updated_at?: string;
+      };
+      Update: {
+        id?: string;
+        user_id?: string;
+        title?: string;
+        category?:
+          | "study"
+          | "creative"
+          | "exercise"
+          | "work"
+          | "side_business"
+          | "household"
+          | "other";
+        deadline?: string;
+        current_status?: string | null;
+        target_condition?: string;
+        priority?: "high" | "medium" | "low";
+        weekly_available_minutes?: number;
+        avoid_time_slots?: string[];
+        estimated_total_minutes?: number | null;
+        completed_minutes?: number;
+        feasibility?: "possible" | "challenging" | "unlikely" | null;
+        ai_summary?: string | null;
+        status?: "draft" | "active" | "completed" | "archived";
+        created_at?: string;
+        updated_at?: string;
+      };
+      Relationships: [];
+    };
+    goal_components: {
+      Row: {
+        id: string;
+        goal_id: string;
+        name: string;
+        estimated_minutes: number;
+        completed_minutes: number;
+        priority: "high" | "medium" | "low";
+        phase: "early" | "middle" | "late";
+        recommended_sessions_per_week: number | null;
+        sort_order: number;
+        created_at: string;
+        updated_at: string;
+      };
+      Insert: {
+        id?: string;
+        goal_id: string;
+        name: string;
+        estimated_minutes: number;
+        completed_minutes?: number;
+        priority?: "high" | "medium" | "low";
+        phase?: "early" | "middle" | "late";
+        recommended_sessions_per_week?: number | null;
+        sort_order?: number;
+        created_at?: string;
+        updated_at?: string;
+      };
+      Update: {
+        id?: string;
+        goal_id?: string;
+        name?: string;
+        estimated_minutes?: number;
+        completed_minutes?: number;
+        priority?: "high" | "medium" | "low";
+        phase?: "early" | "middle" | "late";
+        recommended_sessions_per_week?: number | null;
+        sort_order?: number;
+        created_at?: string;
+        updated_at?: string;
+      };
+      Relationships: [];
+    };
+    work_block_templates: {
+      Row: {
+        id: string;
+        goal_id: string;
+        component_id: string;
+        title: string;
+        min_minutes: number;
+        ideal_minutes: number;
+        max_minutes: number;
+        energy: "low" | "medium" | "high";
+        is_splittable: boolean;
+        preferred_time: string[];
+        requires_deep_work: boolean;
+        context_switch_cost: "low" | "medium" | "high";
+        order_type: "fixed" | "flexible" | "user_choice";
+        time_menus: Json;
+        sort_order: number;
+        created_at: string;
+        updated_at: string;
+      };
+      Insert: {
+        id?: string;
+        goal_id: string;
+        component_id: string;
+        title: string;
+        min_minutes: number;
+        ideal_minutes: number;
+        max_minutes: number;
+        energy?: "low" | "medium" | "high";
+        is_splittable?: boolean;
+        preferred_time?: string[];
+        requires_deep_work?: boolean;
+        context_switch_cost?: "low" | "medium" | "high";
+        order_type?: "fixed" | "flexible" | "user_choice";
+        time_menus?: Json;
+        sort_order?: number;
+        created_at?: string;
+        updated_at?: string;
+      };
+      Update: {
+        id?: string;
+        goal_id?: string;
+        component_id?: string;
+        title?: string;
+        min_minutes?: number;
+        ideal_minutes?: number;
+        max_minutes?: number;
+        energy?: "low" | "medium" | "high";
+        is_splittable?: boolean;
+        preferred_time?: string[];
+        requires_deep_work?: boolean;
+        context_switch_cost?: "low" | "medium" | "high";
+        order_type?: "fixed" | "flexible" | "user_choice";
+        time_menus?: Json;
+        sort_order?: number;
+        created_at?: string;
+        updated_at?: string;
+      };
+      Relationships: [];
+    };
+    user_ai_settings: {
+      Row: {
+        id: string;
+        user_id: string;
+        provider: "openai" | "gemini";
+        model: string;
+        api_key_ref: string | null;
+        api_key_last4: string | null;
+        monthly_token_limit: number | null;
+        tokens_used_this_month: number;
+        usage_reset_at: string;
+        created_at: string;
+        updated_at: string;
+      };
+      Insert: {
+        id?: string;
+        user_id: string;
+        provider?: "openai" | "gemini";
+        model?: string;
+        api_key_ref?: string | null;
+        api_key_last4?: string | null;
+        monthly_token_limit?: number | null;
+        tokens_used_this_month?: number;
+        usage_reset_at?: string;
+        created_at?: string;
+        updated_at?: string;
+      };
+      Update: {
+        id?: string;
+        user_id?: string;
+        provider?: "openai" | "gemini";
+        model?: string;
+        api_key_ref?: string | null;
+        api_key_last4?: string | null;
+        monthly_token_limit?: number | null;
+        tokens_used_this_month?: number;
+        usage_reset_at?: string;
+        created_at?: string;
+        updated_at?: string;
+      };
+      Relationships: [];
+    };
+    ai_request_logs: {
+      Row: {
+        id: string;
+        user_id: string;
+        request_type: "goal_decompose" | "reschedule" | "chat" | "test_connection";
+        input_summary_masked: string;
+        output_summary_masked: string | null;
+        provider: "openai" | "gemini";
+        token_usage: Json;
+        created_at: string;
+      };
+      Insert: {
+        id?: string;
+        user_id: string;
+        request_type: "goal_decompose" | "reschedule" | "chat" | "test_connection";
+        input_summary_masked: string;
+        output_summary_masked?: string | null;
+        provider: "openai" | "gemini";
+        token_usage?: Json;
+        created_at?: string;
+      };
+      Update: {
+        id?: string;
+        user_id?: string;
+        request_type?: "goal_decompose" | "reschedule" | "chat" | "test_connection";
+        input_summary_masked?: string;
+        output_summary_masked?: string | null;
+        provider?: "openai" | "gemini";
+        token_usage?: Json;
+        created_at?: string;
+      };
+      Relationships: [];
+    };
     routine_day_overrides: {
       Row: {
         id: string;
@@ -223,6 +481,23 @@ type DefaultSchema = {
     flexibility_type: "fixed" | "flexible";
     override_target_type: "wake" | "sleep" | "routine";
     override_action: "skip" | "modify";
+    goal_status: "draft" | "active" | "completed" | "archived";
+    goal_priority: "high" | "medium" | "low";
+    goal_category:
+      | "study"
+      | "creative"
+      | "exercise"
+      | "work"
+      | "side_business"
+      | "household"
+      | "other";
+    goal_phase: "early" | "middle" | "late";
+    energy_level: "low" | "medium" | "high";
+    feasibility_type: "possible" | "challenging" | "unlikely";
+    order_type: "fixed" | "flexible" | "user_choice";
+    context_switch_cost: "low" | "medium" | "high";
+    ai_provider: "openai" | "gemini";
+    ai_request_type: "goal_decompose" | "reschedule" | "chat" | "test_connection";
   };
   CompositeTypes: Record<string, never>;
 };

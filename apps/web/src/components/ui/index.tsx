@@ -151,7 +151,7 @@ export function Badge({
   tone = "neutral",
 }: {
   children: ReactNode;
-  tone?: "neutral" | "success" | "warning";
+  tone?: "neutral" | "success" | "warning" | "info";
 }) {
   return (
     <span
@@ -160,9 +160,25 @@ export function Badge({
         tone === "neutral" && "bg-notion-hover text-notion-muted",
         tone === "success" && "bg-emerald-50 text-notion-success",
         tone === "warning" && "bg-amber-50 text-amber-700",
+        tone === "info" && "bg-blue-50 text-blue-700",
       )}
     >
       {children}
     </span>
+  );
+}
+
+export function Textarea({
+  className,
+  ...props
+}: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  return (
+    <textarea
+      className={cn(
+        "w-full rounded-[4px] border border-notion-border bg-white px-3 py-2 text-sm text-notion-text outline-none transition-shadow placeholder:text-notion-muted focus:border-notion-accent focus:ring-2 focus:ring-notion-accent/20",
+        className,
+      )}
+      {...props}
+    />
   );
 }

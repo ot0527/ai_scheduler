@@ -36,3 +36,12 @@ enable_anonymous_sign_ins = false
 enable_signup = true
 double_confirm_changes = true
 enable_confirmations = false
+
+[functions.goal-decompose]
+verify_jwt = true
+
+[functions.goal-approve-decompose]
+verify_jwt = true
+
+[functions.ai-settings]
+verify_jwt = true

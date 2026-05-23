@@ -9,4 +9,7 @@ export const queryKeys = {
   fixedSchedules: (userId: string) => ["fixed_schedules", userId] as const,
   dayOverrides: (userId: string, date: string) =>
     ["routine_day_overrides", userId, date] as const,
+  goals: (userId: string) => ["goals", userId] as const,
+  goal: (userId: string, goalId: string) => ["goals", userId, goalId] as const,
+  aiSettings: (userId: string) => ["user_ai_settings", userId] as const,
 };

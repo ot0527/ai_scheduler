@@ -6,15 +6,19 @@ import {
   Loader2,
   Settings2,
   Sparkles,
+  Target,
+  Bot,
 } from "lucide-react";
 import { useSetupComplete } from "@/hooks/useScheduleData";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { to: "/", label: "ホーム", icon: Home, end: true },
+  { to: "/goals", label: "目標", icon: Target },
   { to: "/settings/preferences", label: "基本設定", icon: Settings2 },
   { to: "/settings/routines", label: "生活リズム", icon: Sparkles },
   { to: "/settings/fixed", label: "固定予定", icon: CalendarDays },
+  { to: "/settings/ai", label: "AI設定", icon: Bot },
 ];
 
 export function AppLayout() {
