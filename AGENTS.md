@@ -32,12 +32,12 @@ docs/               … 企画書・技術選定
 
 ### レイヤー分担
 
-| 処理 | 置き場所 |
-| --- | --- |
-| 空き時間計算・バリデーション | `packages/core` |
-| DB 行 → ドメイン型の変換 | `packages/core/src/mappers` |
-| Supabase CRUD・React Query | `apps/web/src/hooks`, `apps/web/src/lib` |
-| 画面・フォーム | `apps/web/src/pages`, `apps/web/src/components` |
+| 処理                         | 置き場所                                        |
+| ---------------------------- | ----------------------------------------------- |
+| 空き時間計算・バリデーション | `packages/core`                                 |
+| DB 行 → ドメイン型の変換     | `packages/core/src/mappers`                     |
+| Supabase CRUD・React Query   | `apps/web/src/hooks`, `apps/web/src/lib`        |
+| 画面・フォーム               | `apps/web/src/pages`, `apps/web/src/components` |
 
 ### 拡張時の指針
 
