@@ -99,6 +99,7 @@ Phase 0〜5 のマイグレーションが適用され、以下が作成され�
 - Phase 2: `goals`, `goal_components`, `work_block_templates`, `user_ai_settings`, `ai_request_logs`
 - Phase 3: `goal_budgets`, `schedules`, `scheduled_blocks`, `alerts`
 - Phase 4〜5: 振り返りカラム、通知設定、Vault RPC 等
+- セキュリティ強化: `user_ai_settings` のクライアント直接書き込み禁止、Vault RPC 所有者検証
 
 適用状況は Dashboard の **Database → Migrations** でも確認できます。
 
@@ -136,6 +137,14 @@ supabase functions deploy delete-account
 
 **なぜ先に `core build` か**: Edge Function は `packages/core/dist` の共有ロジックを参照するため、ビルド成果物を最新にしておく必要があります。
 
+**本番デプロイ時（任意）**: Edge Function の CORS を制限する場合、Supabase Dashboard → **Project Settings → Edge Functions → Secrets** に以下を設定します。
+
+```env
+ALLOWED_ORIGINS=https://your-production-domain.com
+```
+
+未設定時は `http://localhost:*` / `http://127.0.0.1:*` のみ許可されます（ローカル開発向け）。
+
 ### 6. フロントエンドの環境変数
 
 ```bash
@@ -147,11 +156,9 @@ cp apps/web/.env.example apps/web/.env
 ```env
 VITE_SUPABASE_URL=https://<your-project-ref>.supabase.co
 VITE_SUPABASE_ANON_KEY=<anon key>
-VITE_SUPABASE_AUTH_EMAIL=<開発用ユーザーのメール>
-VITE_SUPABASE_AUTH_PASSWORD=<開発用ユーザーのパスワード>
 ```
 
-ログイン画面はありません。起動時に上記資格情報で自動サインインします（開発用の簡略構成）。
+**認証について**: パスワード等の資格情報は `.env` に置きません。起動後、ブラウザのログイン画面からメールアドレスとパスワードでサインインします。セッションはブラウザの localStorage に保存され、ページを閉じてもログイン状態は維持されます（明示的にサインアウトするか、アカウント削除するまで）。
 
 ### 7. 開発サーバーの起動
 
@@ -164,11 +171,12 @@ pnpm dev
 
 ### 8. 動作確認（最小）
 
-1. 初回設定で起床・就寝時刻を入力
-2. 「生活リズム」で夕食・風呂などを登録
-3. 「固定予定」で仕事などを登録
-4. ホームで今日の予定・空き時間を確認
-5. （Phase 2 以降）目標登録 → AI 分解 → 時間予算 → スケジュール承認
+1. ログイン画面で、手順 2 で作成した開発用ユーザーでサインイン（または「新規登録」からアカウント作成）
+2. 初回設定で起床・就寝時刻を入力
+3. 「生活リズム」で夕食・風呂などを登録
+4. 「固定予定」で仕事などを登録
+5. ホームで今日の予定・空き時間を確認
+6. （Phase 2 以降）目標登録 → AI 分解 → 時間予算 → スケジュール承認
 
 ---
 
@@ -495,7 +503,7 @@ DELETE FROM auth.users;
 
 Vault 上の API キーも消したいときは、**先に** 以下を実行してから上記 `DELETE FROM auth.users` を実行します。
 
-`user_ai_settings.api_key_ref` は **TEXT 型**ですが、`delete_user_api_key` は **UUID 型**の引数を取るため、`::uuid` でキャストが必要です。
+`user_ai_settings.api_key_ref` は **TEXT 型**ですが、`delete_user_api_key` は **UUID 型**の引数を取るため、`::uuid` でキャストが必要です。所有者検証のため **ユーザー ID** も渡します。
 
 ```sql
 DO $$
@@ -503,11 +511,11 @@ DECLARE
   r RECORD;
 BEGIN
   FOR r IN
-    SELECT api_key_ref
+    SELECT api_key_ref, user_id
     FROM public.user_ai_settings
     WHERE api_key_ref IS NOT NULL
   LOOP
-    PERFORM public.delete_user_api_key(r.api_key_ref::uuid);
+    PERFORM public.delete_user_api_key(r.api_key_ref::uuid, r.user_id);
   END LOOP;
 END $$;
 
@@ -524,9 +532,9 @@ DELETE FROM auth.users;
 
 #### 削除後の作業
 
-1. Dashboard → **Authentication → Users → Add user** で開発用ユーザーを再作成
-2. `.env` の `VITE_SUPABASE_AUTH_EMAIL` / `VITE_SUPABASE_AUTH_PASSWORD` と一致させる（同じなら変更不要）
-3. `pnpm dev` で起動し、初回設定から入力し直す
+1. Dashboard → **Authentication → Users → Add user** で開発用ユーザーを再作成（またはアプリのログイン画面から「新規登録」）
+2. `pnpm dev` で起動し、ログイン画面からサインイン
+3. 初回設定から入力し直す
 
 新規ユーザー作成時、`handle_new_user` トリガーにより空の `profiles` と `user_preferences` が自動作成されます。
 
@@ -568,7 +576,7 @@ BEGIN
   WHERE user_id = '<ユーザー UUID>' AND api_key_ref IS NOT NULL;
 
   IF v_ref IS NOT NULL THEN
-    PERFORM public.delete_user_api_key(v_ref::uuid);
+    PERFORM public.delete_user_api_key(v_ref::uuid, '<ユーザー UUID>'::uuid);
   END IF;
 END $$;
 
@@ -616,7 +624,11 @@ ai_scheduler/
 
 - 全 public テーブルで RLS を有効化し、`auth.uid()` による本人データのみアクセス可
 - クライアントには **anon key のみ**（service_role は Edge Function 内のみ）
+- **認証資格情報（パスワード）はクライアントに埋め込まない**。ログイン画面から Supabase Auth でサインイン
 - AI 用 API キーは **Vault** に暗号化保存（BYOK）。クライアントから AI プロバイダへ直接通信しない
+- `user_ai_settings` の書き込み（API キー参照・使用量等）は **Edge Function（service_role）経由のみ**
+- Vault RPC（`get_api_key_by_ref` / `delete_user_api_key`）は **所有者検証**付き
+- Edge Function の CORS は `ALLOWED_ORIGINS` で制限（未設定時は localhost のみ）
 - AI 出力・仮スケジュールはユーザー承認後にのみ DB へ反映
 
 詳細は [基本設計書](docs/基本設計書.md) の非機能設計・セキュリティを参照。
@@ -631,10 +643,12 @@ ai_scheduler/
 - プロジェクトが pause していないか
 - `.env` 変更後は `pnpm dev` を再起動
 
-### セッション開始エラー
+### ログイン・セッション
 
-- `VITE_SUPABASE_AUTH_EMAIL` / `VITE_SUPABASE_AUTH_PASSWORD` が設定されているか
-- Dashboard **Authentication → Users** に該当ユーザーが存在するか
+- 起動時にログイン画面が表示される。Dashboard **Authentication → Users** にユーザーが存在するか確認
+- 新規登録時、Supabase プロジェクトで **メール確認が有効** だと確認リンクのクリックが必要な場合がある（開発中は Dashboard → Authentication → Providers → Email で「Confirm email」をオフにすると省略可能）
+- 一度サインインするとセッションは localStorage に保存され、ブラウザを閉じても維持される
+- ログアウトしたい場合はブラウザのサイトデータを消すか、アカウント削除（設定 → データの管理）を実行
 
 ### `supabase db push` が失敗する
 
@@ -666,7 +680,7 @@ pnpm --filter @ai-scheduler/core build
 
 | エラー | 原因 | 対処 |
 | --- | --- | --- |
-| `function public.delete_user_api_key(text) does not exist` | `api_key_ref`（TEXT）を UUID キャストせず渡している | `r.api_key_ref::uuid` のように **`::uuid` を付ける**。または Vault 削除を省略して `DELETE FROM auth.users;` のみ実行 |
+| `function public.delete_user_api_key(text) does not exist` | 旧シグネチャで呼び出している | `delete_user_api_key(p_secret_id::uuid, p_user_id::uuid)` の **2 引数形式**を使う。または Vault 削除を省略して `DELETE FROM auth.users;` のみ実行 |
 | `permission denied for function delete_user_api_key` | SQL Editor の実行ロールに権限がない | 簡易手順の `DELETE FROM auth.users;` のみ実行（Vault にキーが残るが開発用途では多くの場合問題なし） |
 
 ### データが「今日」と合わない（SQL Editor）

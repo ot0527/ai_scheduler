@@ -21,10 +21,10 @@ const RETRY_USER_HINT =
 
 function isRetriableAIError(message: string): boolean {
   return (
-    message.includes("invalid JSON") ||
     message.includes("MAX_TOKENS") ||
     message.includes("途中で切れ") ||
-    message.includes("AI output validation failed")
+    message.includes("出力形式が不正") ||
+    message.includes("AI 出力の検証に失敗")
   );
 }
 
@@ -62,7 +62,8 @@ async function callOpenAI<T>(
 
   if (!response.ok) {
     const body = await response.text();
-    throw new Error(`OpenAI API error: ${response.status} ${body.slice(0, 200)}`);
+    console.error(`OpenAI API error: ${response.status}`, body.slice(0, 500));
+    throw new Error("OpenAI API の呼び出しに失敗しました");
   }
 
   const json = await response.json();
@@ -80,16 +81,16 @@ async function callOpenAI<T>(
   try {
     parsedJson = JSON.parse(content);
   } catch {
-    throw new Error(
-      `OpenAI returned invalid JSON: ${content.slice(0, 200)}`,
-    );
+    console.error("OpenAI returned invalid JSON");
+    throw new Error("OpenAI の出力形式が不正です");
   }
 
   if (options?.preprocess) parsedJson = options.preprocess(parsedJson);
 
   const parsed = responseSchema.safeParse(parsedJson);
   if (!parsed.success) {
-    throw new Error(`AI output validation failed: ${parsed.error.message}`);
+    console.error("AI output validation failed:", parsed.error.message);
+    throw new Error("AI 出力の検証に失敗しました");
   }
 
   return {
@@ -145,7 +146,8 @@ async function callGemini<T>(
 
   if (!response.ok) {
     const body = await response.text();
-    throw new Error(`Gemini API error: ${response.status} ${body.slice(0, 300)}`);
+    console.error(`Gemini API error: ${response.status}`, body.slice(0, 500));
+    throw new Error("Gemini API の呼び出しに失敗しました");
   }
 
   const json = await response.json();
@@ -171,16 +173,16 @@ async function callGemini<T>(
   try {
     parsedJson = JSON.parse(content);
   } catch {
-    throw new Error(
-      `Gemini returned invalid JSON（出力が途中で切れた可能性があります）: ${content.slice(0, 200)}`,
-    );
+    console.error("Gemini returned invalid JSON");
+    throw new Error("Gemini の出力形式が不正です");
   }
 
   if (options?.preprocess) parsedJson = options.preprocess(parsedJson);
 
   const parsed = responseSchema.safeParse(parsedJson);
   if (!parsed.success) {
-    throw new Error(`AI output validation failed: ${parsed.error.message}`);
+    console.error("AI output validation failed:", parsed.error.message);
+    throw new Error("AI 出力の検証に失敗しました");
   }
 
   const usage = json.usageMetadata ?? {};
@@ -290,8 +292,8 @@ export async function testAIConnection(
   });
 
   if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`Gemini 接続に失敗しました: ${body.slice(0, 200)}`);
+    console.error("Gemini connection test failed");
+    throw new Error("Gemini 接続に失敗しました");
   }
 
   const json = await response.json();

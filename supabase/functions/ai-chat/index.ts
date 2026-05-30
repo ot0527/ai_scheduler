@@ -20,15 +20,15 @@ import {
   maskSummary,
   resolveAIConfig,
 } from "../_shared/ai-utils.ts";
-import { corsHeaders, errorResponse, jsonResponse } from "../_shared/cors.ts";
+import { errorResponse, getCorsHeaders, jsonResponse } from "../_shared/cors.ts";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response("ok", { headers: getCorsHeaders(req) });
   }
 
   if (req.method !== "POST") {
-    return errorResponse("Method not allowed", 405);
+    return errorResponse("Method not allowed", 405, req);
   }
 
   const auth = await requireAuth(req);
@@ -37,7 +37,7 @@ serve(async (req) => {
   const body = await req.json().catch(() => null);
   const parsed = chatRequestSchema.safeParse(body);
   if (!parsed.success) {
-    return errorResponse("入力が不正です");
+    return errorResponse("入力が不正です", 400, req);
   }
 
   const userClient = createUserClient(auth.authHeader);
@@ -46,7 +46,7 @@ serve(async (req) => {
 
   const usageError = await assertAIUsageAllowed(serviceClient, auth.userId);
   if (usageError) {
-    return errorResponse(usageError, 429);
+    return errorResponse(usageError, 429, req);
   }
 
   const allowed = await checkChatRateLimit(serviceClient, auth.userId);
@@ -54,6 +54,7 @@ serve(async (req) => {
     return errorResponse(
       `本日の AI 相談回数上限（${AI_LIMITS.chatPerDay}回）に達しました`,
       429,
+      req,
     );
   }
 
@@ -62,6 +63,7 @@ serve(async (req) => {
     return errorResponse(
       "AI API キーが未設定です。設定画面でキーを登録してください",
       400,
+      req,
     );
   }
 
@@ -181,14 +183,18 @@ serve(async (req) => {
       tokenUsage: result.tokenUsage,
     });
 
-    return jsonResponse({
-      reply: result.data.reply,
-      suggestedActions: result.data.suggestedActions ?? [],
-      tokenUsage: result.tokenUsage,
-    });
+    return jsonResponse(
+      {
+        reply: result.data.reply,
+        suggestedActions: result.data.suggestedActions ?? [],
+        tokenUsage: result.tokenUsage,
+      },
+      200,
+      req,
+    );
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "AI 相談に失敗しました";
-    return errorResponse(message, 502);
+    return errorResponse(message, 502, req);
   }
 });

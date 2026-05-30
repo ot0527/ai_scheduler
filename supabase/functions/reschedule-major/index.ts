@@ -20,15 +20,15 @@ import {
   resolveAIConfig,
 } from "../_shared/ai-utils.ts";
 import { fetchActiveGoalsWithBlocks, runBudgetCalculation } from "../_shared/schedule-utils.ts";
-import { corsHeaders, errorResponse, jsonResponse } from "../_shared/cors.ts";
+import { errorResponse, getCorsHeaders, jsonResponse } from "../_shared/cors.ts";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response("ok", { headers: getCorsHeaders(req) });
   }
 
   if (req.method !== "POST") {
-    return errorResponse("Method not allowed", 405);
+    return errorResponse("Method not allowed", 405, req);
   }
 
   const auth = await requireAuth(req);
@@ -40,12 +40,12 @@ serve(async (req) => {
 
   const allowed = await checkRescheduleRateLimit(serviceClient, auth.userId);
   if (!allowed) {
-    return errorResponse("本日の大規模リスケ回数上限（3回）に達しました", 429);
+    return errorResponse("本日の大規模リスケ回数上限（3回）に達しました", 429, req);
   }
 
   const usageError = await assertAIUsageAllowed(serviceClient, auth.userId);
   if (usageError) {
-    return errorResponse(usageError, 429);
+    return errorResponse(usageError, 429, req);
   }
 
   const aiConfig = await resolveAIConfig(serviceClient, auth.userId);
@@ -53,6 +53,7 @@ serve(async (req) => {
     return errorResponse(
       "AI API キーが未設定です。設定画面でキーを登録してください",
       400,
+      req,
     );
   }
 
@@ -112,13 +113,17 @@ serve(async (req) => {
       tokenUsage: result.tokenUsage,
     });
 
-    return jsonResponse({
-      preview: result.data,
-      tokenUsage: result.tokenUsage,
-    });
+    return jsonResponse(
+      {
+        preview: result.data,
+        tokenUsage: result.tokenUsage,
+      },
+      200,
+      req,
+    );
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "大規模リスケに失敗しました";
-    return errorResponse(message, 502);
+    return errorResponse(message, 502, req);
   }
 });

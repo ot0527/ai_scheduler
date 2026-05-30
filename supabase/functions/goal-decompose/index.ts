@@ -19,15 +19,15 @@ import {
   maskSummary,
   resolveAIConfig,
 } from "../_shared/ai-utils.ts";
-import { corsHeaders, errorResponse, jsonResponse } from "../_shared/cors.ts";
+import { errorResponse, getCorsHeaders, jsonResponse } from "../_shared/cors.ts";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response("ok", { headers: getCorsHeaders(req) });
   }
 
   if (req.method !== "POST") {
-    return errorResponse("Method not allowed", 405);
+    return errorResponse("Method not allowed", 405, req);
   }
 
   const auth = await requireAuth(req);
@@ -36,7 +36,7 @@ serve(async (req) => {
   const body = await req.json().catch(() => null);
   const goalId = body?.goalId as string | undefined;
   if (!goalId) {
-    return errorResponse("goalId が必要です");
+    return errorResponse("goalId が必要です", 400, req);
   }
 
   const userClient = createUserClient(auth.authHeader);
@@ -50,7 +50,7 @@ serve(async (req) => {
     .single();
 
   if (goalError || !goal) {
-    return errorResponse("目標が見つかりません", 404);
+    return errorResponse("目標が見つかりません", 404, req);
   }
 
   const { data: prefs } = await userClient
@@ -61,12 +61,12 @@ serve(async (req) => {
 
   const allowed = await checkGoalDecomposeRateLimit(serviceClient, auth.userId);
   if (!allowed) {
-    return errorResponse("本日の目標分解回数上限（5回）に達しました", 429);
+    return errorResponse("本日の目標分解回数上限（5回）に達しました", 429, req);
   }
 
   const usageError = await assertAIUsageAllowed(serviceClient, auth.userId);
   if (usageError) {
-    return errorResponse(usageError, 429);
+    return errorResponse(usageError, 429, req);
   }
 
   const aiConfig = await resolveAIConfig(serviceClient, auth.userId);
@@ -74,6 +74,7 @@ serve(async (req) => {
     return errorResponse(
       "AI API キーが未設定です。設定画面でキーを登録してください",
       400,
+      req,
     );
   }
 
@@ -114,14 +115,18 @@ serve(async (req) => {
       tokenUsage: result.tokenUsage,
     });
 
-    return jsonResponse({
-      goalId,
-      preview: result.data,
-      tokenUsage: result.tokenUsage,
-    });
+    return jsonResponse(
+      {
+        goalId,
+        preview: result.data,
+        tokenUsage: result.tokenUsage,
+      },
+      200,
+      req,
+    );
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "AI 分解に失敗しました";
-    return errorResponse(message, 502);
+    return errorResponse(message, 502, req);
   }
 });

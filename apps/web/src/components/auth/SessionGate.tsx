@@ -1,12 +1,13 @@
 import { Outlet } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { LoginPage } from "@/pages/LoginPage";
 
 /**
- * Supabase セッションの準備が完了するまで待機し、準備完了後に子ルートを描画する。
+ * Supabase セッションの準備が完了するまで待機し、未ログイン時はログイン画面を表示する。
  */
 export function SessionGate() {
-  const { user, loading, error } = useAuth();
+  const { user, loading } = useAuth();
 
   if (loading) {
     return (
@@ -16,15 +17,8 @@ export function SessionGate() {
     );
   }
 
-  if (error || !user) {
-    return (
-      <div className="flex h-full items-center justify-center bg-notion-bg px-4">
-        <p className="max-w-md text-center text-sm text-notion-danger">
-          {error?.message ??
-            "セッションの開始に失敗しました。apps/web/.env の Supabase 設定を確認してください。"}
-        </p>
-      </div>
-    );
+  if (!user) {
+    return <LoginPage />;
   }
 
   return <Outlet />;

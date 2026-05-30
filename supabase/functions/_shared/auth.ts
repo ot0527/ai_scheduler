@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.50.2";
-import { errorResponse } from "./cors.ts";
+import { errorResponse, getCorsHeaders } from "./cors.ts";
 
 export interface AuthContext {
   userId: string;
@@ -12,13 +12,13 @@ export interface AuthContext {
 export async function requireAuth(req: Request): Promise<AuthContext | Response> {
   const authHeader = req.headers.get("Authorization");
   if (!authHeader) {
-    return errorResponse("認証が必要です", 401);
+    return errorResponse("認証が必要です", 401, req);
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
   if (!supabaseUrl || !supabaseAnonKey) {
-    return errorResponse("サーバー設定が不足しています", 500);
+    return errorResponse("サーバー設定が不足しています", 500, req);
   }
 
   const supabase = createClient(supabaseUrl, supabaseAnonKey, {
@@ -31,7 +31,7 @@ export async function requireAuth(req: Request): Promise<AuthContext | Response>
   } = await supabase.auth.getUser();
 
   if (error || !user) {
-    return errorResponse("認証に失敗しました", 401);
+    return errorResponse("認証に失敗しました", 401, req);
   }
 
   return { userId: user.id, authHeader };

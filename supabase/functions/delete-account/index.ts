@@ -3,7 +3,12 @@ import {
   createServiceClient,
   requireAuth,
 } from "../_shared/auth.ts";
-import { corsHeaders, errorResponse, jsonResponse } from "../_shared/cors.ts";
+import {
+  errorResponse,
+  getCorsHeaders,
+  internalErrorResponse,
+  jsonResponse,
+} from "../_shared/cors.ts";
 
 /**
  * ユーザーのアカウントと全データを削除する。
@@ -11,11 +16,11 @@ import { corsHeaders, errorResponse, jsonResponse } from "../_shared/cors.ts";
  */
 serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response("ok", { headers: getCorsHeaders(req) });
   }
 
   if (req.method !== "POST") {
-    return errorResponse("Method not allowed", 405);
+    return errorResponse("Method not allowed", 405, req);
   }
 
   const auth = await requireAuth(req);
@@ -25,7 +30,7 @@ serve(async (req) => {
   const confirmText = body?.confirmText as string | undefined;
 
   if (confirmText !== "削除する") {
-    return errorResponse('確認のため「削除する」と入力してください');
+    return errorResponse('確認のため「削除する」と入力してください', 400, req);
   }
 
   const serviceClient = createServiceClient();
@@ -39,7 +44,10 @@ serve(async (req) => {
   if (aiSettings?.api_key_ref) {
     const { error: vaultError } = await serviceClient.rpc(
       "delete_user_api_key",
-      { p_secret_id: aiSettings.api_key_ref },
+      {
+        p_secret_id: aiSettings.api_key_ref,
+        p_user_id: auth.userId,
+      },
     );
     if (vaultError) {
       console.error("vault delete failed:", vaultError.message);
@@ -51,11 +59,8 @@ serve(async (req) => {
   );
 
   if (deleteError) {
-    return errorResponse(
-      deleteError.message ?? "アカウント削除に失敗しました",
-      500,
-    );
+    return internalErrorResponse("delete-account", deleteError, req);
   }
 
-  return jsonResponse({ deleted: true });
+  return jsonResponse({ deleted: true }, 200, req);
 });

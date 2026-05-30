@@ -1,15 +1,20 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { goalDecomposeApproveSchema } from "../../../packages/core/dist/ai/schemas/goal-decompose.js";
 import { createUserClient, requireAuth } from "../_shared/auth.ts";
-import { corsHeaders, errorResponse, jsonResponse } from "../_shared/cors.ts";
+import {
+  errorResponse,
+  getCorsHeaders,
+  internalErrorResponse,
+  jsonResponse,
+} from "../_shared/cors.ts";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response("ok", { headers: getCorsHeaders(req) });
   }
 
   if (req.method !== "POST") {
-    return errorResponse("Method not allowed", 405);
+    return errorResponse("Method not allowed", 405, req);
   }
 
   const auth = await requireAuth(req);
@@ -20,12 +25,12 @@ serve(async (req) => {
   const decompose = body?.decompose;
 
   if (!goalId || !decompose) {
-    return errorResponse("goalId と decompose が必要です");
+    return errorResponse("goalId と decompose が必要です", 400, req);
   }
 
   const parsed = goalDecomposeApproveSchema.safeParse(decompose);
   if (!parsed.success) {
-    return errorResponse(`検証エラー: ${parsed.error.message}`);
+    return errorResponse("分解結果の形式が不正です", 400, req);
   }
 
   const userClient = createUserClient(auth.authHeader);
@@ -38,7 +43,7 @@ serve(async (req) => {
     .single();
 
   if (goalError || !goal) {
-    return errorResponse("目標が見つかりません", 404);
+    return errorResponse("目標が見つかりません", 404, req);
   }
 
   const output = parsed.data;
@@ -49,7 +54,11 @@ serve(async (req) => {
     .eq("goal_id", goalId);
 
   if (deleteComponentsError) {
-    return errorResponse(deleteComponentsError.message, 500);
+    return internalErrorResponse(
+      "goal-approve-decompose delete components",
+      deleteComponentsError,
+      req,
+    );
   }
 
   const componentRows = output.components.map((component, index) => ({
@@ -66,20 +75,29 @@ serve(async (req) => {
     await userClient.from("goal_components").insert(componentRows).select("id, name");
 
   if (insertComponentsError || !insertedComponents) {
-    return errorResponse(insertComponentsError?.message ?? "構成要素の保存に失敗", 500);
+    return internalErrorResponse(
+      "goal-approve-decompose insert components",
+      insertComponentsError,
+      req,
+    );
   }
 
   const componentIdByName = new Map(
     insertedComponents.map((row) => [row.name.toLowerCase(), row.id]),
   );
 
-  const workBlockRows = output.workBlocks.map((block, index) => {
+  const workBlockRows: Array<Record<string, unknown>> = [];
+  for (const [index, block] of output.workBlocks.entries()) {
     const componentId = componentIdByName.get(block.component.toLowerCase());
     if (!componentId) {
-      throw new Error(`Unknown component: ${block.component}`);
+      return errorResponse(
+        `不明な構成要素です: ${block.component}`,
+        400,
+        req,
+      );
     }
 
-    return {
+    workBlockRows.push({
       goal_id: goalId,
       component_id: componentId,
       title: block.title,
@@ -94,15 +112,19 @@ serve(async (req) => {
       order_type: block.orderType,
       time_menus: block.timeMenus ?? [],
       sort_order: index,
-    };
-  });
+    });
+  }
 
   const { error: insertBlocksError } = await userClient
     .from("work_block_templates")
     .insert(workBlockRows);
 
   if (insertBlocksError) {
-    return errorResponse(insertBlocksError.message, 500);
+    return internalErrorResponse(
+      "goal-approve-decompose insert blocks",
+      insertBlocksError,
+      req,
+    );
   }
 
   const { error: updateGoalError } = await userClient
@@ -116,8 +138,12 @@ serve(async (req) => {
     .eq("id", goalId);
 
   if (updateGoalError) {
-    return errorResponse(updateGoalError.message, 500);
+    return internalErrorResponse(
+      "goal-approve-decompose update goal",
+      updateGoalError,
+      req,
+    );
   }
 
-  return jsonResponse({ goalId, status: "active" });
+  return jsonResponse({ goalId, status: "active" }, 200, req);
 });

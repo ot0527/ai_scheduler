@@ -36,6 +36,7 @@ export async function resolveAIConfig(
   if (settings?.api_key_ref) {
     const { data: secret, error } = await serviceClient.rpc("get_api_key_by_ref", {
       p_secret_id: settings.api_key_ref,
+      p_user_id: userId,
     });
 
     if (!error && typeof secret === "string" && secret.length > 0) {

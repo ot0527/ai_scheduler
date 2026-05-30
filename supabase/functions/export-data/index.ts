@@ -3,7 +3,7 @@ import {
   createUserClient,
   requireAuth,
 } from "../_shared/auth.ts";
-import { corsHeaders, errorResponse, jsonResponse } from "../_shared/cors.ts";
+import { errorResponse, getCorsHeaders, jsonResponse } from "../_shared/cors.ts";
 
 /**
  * ユーザー自身のデータを JSON でエクスポートする。
@@ -11,11 +11,11 @@ import { corsHeaders, errorResponse, jsonResponse } from "../_shared/cors.ts";
  */
 serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response("ok", { headers: getCorsHeaders(req) });
   }
 
   if (req.method !== "GET") {
-    return errorResponse("Method not allowed", 405);
+    return errorResponse("Method not allowed", 405, req);
   }
 
   const auth = await requireAuth(req);
@@ -121,5 +121,5 @@ serve(async (req) => {
     aiRequestLogs: aiLogs.data ?? [],
   };
 
-  return jsonResponse(exportPayload);
+  return jsonResponse(exportPayload, 200, req);
 });
