@@ -29,12 +29,44 @@
 | [Supabase CLI](https://supabase.com/docs/guides/cli) | 最新推奨   | DB マイグレーション・Edge Function デプロイ |
 | Supabase アカウント                                  | —          | クラウド上の DB・認証・サーバーレス         |
 
-Supabase CLI のインストール例:
+### ツールのインストール
+
+#### Windows
+
+```powershell
+# Node.js（winget を使う場合）
+winget install OpenJS.NodeJS.LTS
+
+# または nodejs.org からインストーラーをダウンロード
+
+# pnpm
+npm install -g pnpm
+
+# Supabase CLI
+npm install -g supabase
+# または Scoop を使う場合
+scoop bucket add supabase https://github.com/supabase/scoop-bucket.git
+scoop install supabase
+```
+
+#### Ubuntu
 
 ```bash
+# Node.js（nvm を使う場合）
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+source ~/.bashrc
+nvm install 20
+nvm use 20
+
+# または NodeSource 公式リポジトリから
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt-get install -y nodejs
+
+# pnpm
+npm install -g pnpm
+
+# Supabase CLI
 npm install -g supabase
-# または
-pnpm add -g supabase
 ```
 
 ---
@@ -147,6 +179,14 @@ ALLOWED_ORIGINS=https://your-production-domain.com
 
 ### 6. フロントエンドの環境変数
 
+#### Windows
+
+```powershell
+copy apps\web\.env.example apps\web\.env
+```
+
+#### Ubuntu
+
 ```bash
 cp apps/web/.env.example apps/web/.env
 ```
@@ -207,7 +247,7 @@ pnpm dev
 | `supabase migration list`                               | ローカルとリモートのマイグレーション適用状況を表示 |
 | `supabase migration repair <version> --status applied`  | 適用済みマイグレーションの履歴を手動修正           |
 | `supabase functions deploy <name>`                      | Edge Function をクラウドにデプロイ                 |
-| `supabase gen types typescript --linked > tmp-types.ts` | リンク済み DB から TypeScript 型を生成（参考用）   |
+| `supabase gen types typescript --linked > tmp-types.ts`（Windows）<br>`supabase gen types typescript --linked > /tmp/supabase-types.ts`（Ubuntu） | リンク済み DB から TypeScript 型を生成（参考用）   |
 
 ### ローカル Supabase（任意）
 
@@ -292,6 +332,15 @@ CI（GitHub Actions）でも同様のチェックが走ります。
 5. hooks / 画面を更新
 
 型のたたき台生成:
+
+**Windows:**
+
+```powershell
+supabase gen types typescript --linked > .\tmp-types.ts
+# 出力を参考に database-types.ts を手動で更新（RLS やドメイン型は手動管理）
+```
+
+**Ubuntu:**
 
 ```bash
 supabase gen types typescript --linked > /tmp/supabase-types.ts
