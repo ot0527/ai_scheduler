@@ -95,6 +95,21 @@ export const goalDecomposeOutputSchema = z
   })
   .strict()
   .superRefine((data, ctx) => {
+    // SQL 側（approve_goal_decompose）は大文字小文字無視の JOIN で作業ブロックを
+    // 構成要素へ紐付けるため、同名（大文字小文字無視）の構成要素は許可しない
+    const seenNames = new Set<string>();
+    for (const [index, component] of data.components.entries()) {
+      const key = component.name.toLowerCase();
+      if (seenNames.has(key)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `components[${index}] の name が重複しています（大文字小文字は区別されません）`,
+          path: ["components", index, "name"],
+        });
+      }
+      seenNames.add(key);
+    }
+
     const componentNames = new Set(
       data.components.map((component) => component.name.toLowerCase()),
     );

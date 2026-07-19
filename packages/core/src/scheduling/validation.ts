@@ -1,6 +1,6 @@
+import { MINUTES_PER_DAY } from "./constants.js";
 import type { FreeTimeResult } from "./types.js";
 import type { PlacedBlock } from "./placement.js";
-import { mergeOverlappingBlocks } from "./time-utils.js";
 
 /** 検証エラー */
 export interface ScheduleValidationIssue {
@@ -21,10 +21,14 @@ export function validatePlacedBlocks(
 ): ScheduleValidationIssue[] {
   const issues: ScheduleValidationIssue[] = [];
 
-  blocks.forEach((block, index) => {
-    const wakeMinutes = parseWakeSleep(freeTime.wakeTime);
-    const sleepMinutes = parseWakeSleep(freeTime.sleepTime);
+  // calculateFreeTime と同じ規則で日跨ぎ（就寝が起床以前）を正規化する
+  const wakeMinutes = parseWakeSleep(freeTime.wakeTime);
+  let sleepMinutes = parseWakeSleep(freeTime.sleepTime);
+  if (sleepMinutes <= wakeMinutes) {
+    sleepMinutes += MINUTES_PER_DAY;
+  }
 
+  blocks.forEach((block, index) => {
     if (block.startMinutes < wakeMinutes || block.endMinutes > sleepMinutes) {
       issues.push({
         code: "out_of_bounds",
@@ -52,16 +56,22 @@ export function validatePlacedBlocks(
     }
   });
 
-  const blockRanges = blocks.map((block) => ({
-    startMinutes: block.startMinutes,
-    endMinutes: block.endMinutes,
-  }));
-  const merged = mergeOverlappingBlocks(blockRanges);
-  if (merged.length !== blockRanges.length) {
-    issues.push({
-      code: "overlap",
-      message: "作業ブロック同士が重複しています",
-    });
+  // 隣接（前ブロックの終了 = 次ブロックの開始）は重複ではないため、
+  // mergeOverlappingBlocks（隣接も結合する）は使わず真の重なりのみ検出する
+  const sortedRanges = blocks
+    .map((block) => ({
+      startMinutes: block.startMinutes,
+      endMinutes: block.endMinutes,
+    }))
+    .sort((a, b) => a.startMinutes - b.startMinutes);
+  for (let i = 1; i < sortedRanges.length; i++) {
+    if (sortedRanges[i]!.startMinutes < sortedRanges[i - 1]!.endMinutes) {
+      issues.push({
+        code: "overlap",
+        message: "作業ブロック同士が重複しています",
+      });
+      break;
+    }
   }
 
   return issues;

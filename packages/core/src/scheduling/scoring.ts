@@ -125,7 +125,6 @@ export function scorePlacementCandidate(
       ? 1
       : 0.3;
 
-  const slotStartTime = `${String(Math.floor(slot.startMinutes / 60)).padStart(2, "0")}:${String(slot.startMinutes % 60).padStart(2, "0")}`;
   const focusTimeMatchScore = focusTimes.some((focusTime) => {
     const focusMinutes = parseTimeToMinutes(focusTime);
     return Math.abs(focusMinutes - slot.startMinutes) <= 60;

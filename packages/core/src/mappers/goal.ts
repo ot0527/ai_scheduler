@@ -91,12 +91,7 @@ export function mapDecomposeOutputToInsertRows(goalId: string, output: GoalDecom
 /**
  * 分数を「X時間Y分」形式へ変換する。
  *
+ * @deprecated scheduling/formatters の formatDuration を直接使用してください
  * @param minutes - 分数
  */
-export function formatMinutesLabel(minutes: number): string {
-  const hours = Math.floor(minutes / 60);
-  const rest = minutes % 60;
-  if (hours === 0) return `${rest}分`;
-  if (rest === 0) return `${hours}時間`;
-  return `${hours}時間${rest}分`;
-}
+export { formatDuration as formatMinutesLabel } from "../scheduling/formatters.js";

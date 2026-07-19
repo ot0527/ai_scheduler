@@ -6,7 +6,6 @@ import type {
   ScheduleRow,
 } from "@ai-scheduler/core";
 import {
-  deltaCompletedMinutes,
   getWeekPeriod,
   isScheduleFullyRecorded,
   resolveActualMinutes,
@@ -23,7 +22,6 @@ export interface RecordBlockInput {
   scheduleId: string;
   goalId: string;
   plannedMinutes: number;
-  previousActualMinutes: number;
   status: BlockCompletionStatus;
   actualMinutes?: number;
   targetDate: string;
@@ -72,59 +70,21 @@ export function useRecordBlockCompletion() {
             ? "partial"
             : "skipped";
 
-      const { error: blockError } = await supabase
-        .from("scheduled_blocks")
-        .update({
-          status: dbStatus,
-          actual_minutes: actualMinutes,
-        })
-        .eq("id", input.blockId);
-
-      if (blockError) throw blockError;
-
-      const minutesDelta = deltaCompletedMinutes(
-        input.previousActualMinutes,
-        actualMinutes,
+      // ブロック・目標・週次予算を単一トランザクションの RPC で更新する。
+      // 差分は DB 上の旧 actual_minutes から計算されるため、
+      // 並行記録や後段失敗後の再試行でも二重加算しない。
+      const period = getWeekPeriod(new Date(input.targetDate + "T12:00:00"));
+      const { error: recordError } = await supabase.rpc(
+        "record_block_completion",
+        {
+          p_block_id: input.blockId,
+          p_status: dbStatus,
+          p_actual_minutes: actualMinutes,
+          p_period_start: period.periodStart,
+        },
       );
 
-      if (minutesDelta !== 0) {
-        const { data: goal, error: goalFetchError } = await supabase
-          .from("goals")
-          .select("completed_minutes")
-          .eq("id", input.goalId)
-          .eq("user_id", user!.id)
-          .single();
-
-        if (goalFetchError || !goal) throw goalFetchError ?? new Error("目標が見つかりません");
-
-        const { error: goalError } = await supabase
-          .from("goals")
-          .update({
-            completed_minutes: Math.max(0, goal.completed_minutes + minutesDelta),
-          })
-          .eq("id", input.goalId)
-          .eq("user_id", user!.id);
-
-        if (goalError) throw goalError;
-
-        const period = getWeekPeriod(new Date(input.targetDate + "T12:00:00"));
-        const { data: budget } = await supabase
-          .from("goal_budgets")
-          .select("id, completed_minutes")
-          .eq("user_id", user!.id)
-          .eq("goal_id", input.goalId)
-          .eq("period_start", period.periodStart)
-          .maybeSingle();
-
-        if (budget) {
-          await supabase
-            .from("goal_budgets")
-            .update({
-              completed_minutes: Math.max(0, budget.completed_minutes + minutesDelta),
-            })
-            .eq("id", budget.id);
-        }
-      }
+      if (recordError) throw recordError;
 
       const { data: allBlocks, error: blocksError } = await supabase
         .from("scheduled_blocks")
@@ -285,6 +245,7 @@ export function useApplyMajorReschedule() {
         await supabase.from("alerts").insert({
           user_id: user!.id,
           goal_id: null,
+          kind: "major_reschedule",
           severity: preview.status === "needs_adjustment" ? "warning" : "info",
           message: preview.summary,
           suggestions: preview.recommendations,

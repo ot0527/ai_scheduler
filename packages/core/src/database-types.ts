@@ -579,6 +579,7 @@ type DefaultSchema = {
         id: string;
         user_id: string;
         goal_id: string | null;
+        kind: "general" | "weekly_shortage" | "major_reschedule";
         severity: "info" | "warning" | "critical";
         message: string;
         suggestions: Json;
@@ -589,6 +590,7 @@ type DefaultSchema = {
         id?: string;
         user_id: string;
         goal_id?: string | null;
+        kind?: "general" | "weekly_shortage" | "major_reschedule";
         severity?: "info" | "warning" | "critical";
         message: string;
         suggestions?: Json;
@@ -599,6 +601,7 @@ type DefaultSchema = {
         id?: string;
         user_id?: string;
         goal_id?: string | null;
+        kind?: "general" | "weekly_shortage" | "major_reschedule";
         severity?: "info" | "warning" | "critical";
         message?: string;
         suggestions?: Json;
@@ -654,7 +657,33 @@ type DefaultSchema = {
     };
   };
   Views: Record<string, never>;
-  Functions: Record<string, never>;
+  Functions: {
+    increment_tokens_used: {
+      Args: { p_user_id: string; p_tokens: number };
+      Returns: undefined;
+    };
+    increment_goal_progress: {
+      Args: { p_goal_id: string; p_delta: number };
+      Returns: undefined;
+    };
+    increment_budget_progress: {
+      Args: { p_goal_id: string; p_period_start: string; p_delta: number };
+      Returns: undefined;
+    };
+    record_block_completion: {
+      Args: {
+        p_block_id: string;
+        p_status: "planned" | "done" | "partial" | "skipped" | "rescheduled";
+        p_actual_minutes: number;
+        p_period_start: string;
+      };
+      Returns: undefined;
+    };
+    approve_goal_decompose: {
+      Args: { p_goal_id: string; p_payload: Json };
+      Returns: undefined;
+    };
+  };
   Enums: {
     routine_type: "breakfast" | "lunch" | "dinner" | "bath" | "break" | "other";
     applies_to_type: "weekday" | "weekend" | "both";

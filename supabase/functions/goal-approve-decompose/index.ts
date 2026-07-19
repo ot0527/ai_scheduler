@@ -8,6 +8,11 @@ import {
   jsonResponse,
 } from "../_shared/cors.ts";
 
+/**
+ * AI 目標分解の承認を確定する。
+ * 構成要素の入れ替え・作業ブロック生成・目標更新は
+ * approve_goal_decompose RPC 内で単一トランザクションとして実行される。
+ */
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: getCorsHeaders(req) });
@@ -46,103 +51,16 @@ serve(async (req) => {
     return errorResponse("目標が見つかりません", 404, req);
   }
 
-  const output = parsed.data;
+  const { error: approveError } = await userClient.rpc("approve_goal_decompose", {
+    p_goal_id: goalId,
+    p_payload: parsed.data,
+  });
 
-  const { error: deleteComponentsError } = await userClient
-    .from("goal_components")
-    .delete()
-    .eq("goal_id", goalId);
-
-  if (deleteComponentsError) {
-    return internalErrorResponse(
-      "goal-approve-decompose delete components",
-      deleteComponentsError,
-      req,
-    );
-  }
-
-  const componentRows = output.components.map((component, index) => ({
-    goal_id: goalId,
-    name: component.name,
-    estimated_minutes: component.estimatedMinutes,
-    priority: component.priority,
-    phase: component.phase,
-    recommended_sessions_per_week: component.recommendedSessionsPerWeek ?? null,
-    sort_order: index,
-  }));
-
-  const { data: insertedComponents, error: insertComponentsError } =
-    await userClient.from("goal_components").insert(componentRows).select("id, name");
-
-  if (insertComponentsError || !insertedComponents) {
-    return internalErrorResponse(
-      "goal-approve-decompose insert components",
-      insertComponentsError,
-      req,
-    );
-  }
-
-  const componentIdByName = new Map(
-    insertedComponents.map((row) => [row.name.toLowerCase(), row.id]),
-  );
-
-  const workBlockRows: Array<Record<string, unknown>> = [];
-  for (const [index, block] of output.workBlocks.entries()) {
-    const componentId = componentIdByName.get(block.component.toLowerCase());
-    if (!componentId) {
-      return errorResponse(
-        `不明な構成要素です: ${block.component}`,
-        400,
-        req,
-      );
+  if (approveError) {
+    if (approveError.message.includes("unknown component reference")) {
+      return errorResponse("不明な構成要素が含まれています", 400, req);
     }
-
-    workBlockRows.push({
-      goal_id: goalId,
-      component_id: componentId,
-      title: block.title,
-      min_minutes: block.minMinutes,
-      ideal_minutes: block.idealMinutes,
-      max_minutes: block.maxMinutes,
-      energy: block.energy,
-      is_splittable: block.isSplittable,
-      preferred_time: block.preferredTime,
-      requires_deep_work: block.requiresDeepWork,
-      context_switch_cost: block.contextSwitchCost,
-      order_type: block.orderType,
-      time_menus: block.timeMenus ?? [],
-      sort_order: index,
-    });
-  }
-
-  const { error: insertBlocksError } = await userClient
-    .from("work_block_templates")
-    .insert(workBlockRows);
-
-  if (insertBlocksError) {
-    return internalErrorResponse(
-      "goal-approve-decompose insert blocks",
-      insertBlocksError,
-      req,
-    );
-  }
-
-  const { error: updateGoalError } = await userClient
-    .from("goals")
-    .update({
-      estimated_total_minutes: output.goal.estimatedTotalMinutes,
-      feasibility: output.goal.feasibility,
-      ai_summary: output.goal.summary,
-      status: "active",
-    })
-    .eq("id", goalId);
-
-  if (updateGoalError) {
-    return internalErrorResponse(
-      "goal-approve-decompose update goal",
-      updateGoalError,
-      req,
-    );
+    return internalErrorResponse("goal-approve-decompose rpc", approveError, req);
   }
 
   return jsonResponse({ goalId, status: "active" }, 200, req);

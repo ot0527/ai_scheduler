@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { GoalBudgetRow, WeeklyBudgetResult } from "@ai-scheduler/core";
-import { getWeekPeriod } from "@ai-scheduler/core";
+import { getWeekPeriod, toDateKey } from "@ai-scheduler/core";
 import { useAuth } from "@/hooks/useAuth";
 import { invokeFunction } from "@/lib/edge-functions";
 import { supabase } from "@/lib/supabase";
@@ -10,13 +10,12 @@ export interface GoalBudgetWithTitle extends GoalBudgetRow {
   goalTitle: string;
 }
 
-/** ローカル日付を yyyy-MM-dd に変換する。 */
-export function toLocalDateKey(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
+/**
+ * ローカル日付を yyyy-MM-dd に変換する。
+ *
+ * @deprecated core の toDateKey を直接使用してください
+ */
+export const toLocalDateKey = toDateKey;
 
 /** 今週の時間予算一覧を取得する。 */
 export function useGoalBudgets(referenceDate = new Date()) {

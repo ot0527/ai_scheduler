@@ -56,42 +56,31 @@ export function resolveLifeRoutineForDay(
   overrides: RoutineDayOverrideInput[],
 ): ResolvedLifeRoutine {
   const override = findDayOverride(overrides, "routine", routine.id);
-  const label = resolveRoutineLabel(routine.type, routine.label);
 
-  if (override?.action === "skip") {
-    return {
-      id: routine.id,
-      type: routine.type,
-      label,
-      preferredTime: routine.preferredTime,
-      earliestTime: routine.earliestTime,
-      latestTime: routine.latestTime,
-      durationMinutes: routine.durationMinutes,
-      skipped: true,
-    };
-  }
-
-  if (override?.action === "modify") {
-    return {
-      id: routine.id,
-      type: routine.type,
-      label,
-      preferredTime: override.preferredTime ?? routine.preferredTime,
-      earliestTime: override.earliestTime ?? routine.earliestTime,
-      latestTime: override.latestTime ?? routine.latestTime,
-      durationMinutes: override.durationMinutes ?? routine.durationMinutes,
-      skipped: false,
-    };
-  }
-
-  return {
+  const base: ResolvedLifeRoutine = {
     id: routine.id,
     type: routine.type,
-    label,
+    label: resolveRoutineLabel(routine.type, routine.label),
     preferredTime: routine.preferredTime,
     earliestTime: routine.earliestTime,
     latestTime: routine.latestTime,
     durationMinutes: routine.durationMinutes,
     skipped: false,
   };
+
+  if (override?.action === "skip") {
+    return { ...base, skipped: true };
+  }
+
+  if (override?.action === "modify") {
+    return {
+      ...base,
+      preferredTime: override.preferredTime ?? base.preferredTime,
+      earliestTime: override.earliestTime ?? base.earliestTime,
+      latestTime: override.latestTime ?? base.latestTime,
+      durationMinutes: override.durationMinutes ?? base.durationMinutes,
+    };
+  }
+
+  return base;
 }

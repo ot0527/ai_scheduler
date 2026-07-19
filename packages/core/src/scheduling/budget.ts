@@ -151,10 +151,39 @@ export function allocateWeeklyBudgets(
     });
     const totalWeight = weights.reduce((sum, value) => sum + value, 0);
 
-    budgets = requirements.map((item, index) => {
+    // 按分は切り捨てで行い、端数分は必要時間との比率が最も低い目標へ順に配る
+    const exactShares = requirements.map((_, index) => {
       const weight = weights[index] ?? 1;
       const share = totalWeight > 0 ? weight / totalWeight : 1 / requirements.length;
-      const allocated = Math.floor(availableWeeklyMinutes * share);
+      return availableWeeklyMinutes * share;
+    });
+    const allocations = exactShares.map((share) => Math.floor(share));
+
+    let leftover =
+      availableWeeklyMinutes - allocations.reduce((sum, value) => sum + value, 0);
+    const remainderOrder = requirements
+      .map((_, index) => index)
+      .sort(
+        (a, b) =>
+          (exactShares[b]! - allocations[b]!) - (exactShares[a]! - allocations[a]!),
+      );
+    // 各目標は必要時間を上限に、余りがなくなるまで複数周回で配り切る
+    // （1 周 1 分ずつでは上限に達した目標分の端数が残ることがある）
+    while (leftover > 0) {
+      let distributed = false;
+      for (const index of remainderOrder) {
+        if (leftover <= 0) break;
+        if (allocations[index]! < requirements[index]!.requiredMinutes) {
+          allocations[index] = allocations[index]! + 1;
+          leftover -= 1;
+          distributed = true;
+        }
+      }
+      if (!distributed) break;
+    }
+
+    budgets = requirements.map((item, index) => {
+      const allocated = allocations[index] ?? 0;
       const status = determineBudgetStatus(item.requiredMinutes, allocated);
       const warningMessage =
         allocated < item.requiredMinutes

@@ -1,6 +1,7 @@
 const BASE_CORS_HEADERS = {
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
 
 /**
@@ -24,13 +25,17 @@ export function getCorsHeaders(req: Request): Record<string, string> {
     /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)
   ) {
     allowOrigin = origin;
-  } else if (allowed.length > 0) {
-    allowOrigin = allowed[0];
+  }
+
+  // 許可されないオリジンにはヘッダーを付与しない（明示的に拒否）
+  if (!allowOrigin) {
+    return { ...BASE_CORS_HEADERS };
   }
 
   return {
     ...BASE_CORS_HEADERS,
     "Access-Control-Allow-Origin": allowOrigin,
+    Vary: "Origin",
   };
 }
 

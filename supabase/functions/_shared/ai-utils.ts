@@ -132,6 +132,7 @@ export async function checkMonthlyTokenLimit(
 
 /**
  * AI 呼び出し成功後に月間トークン使用量を加算する。
+ * RPC による単一 UPDATE で加算し、並行リクエストでの消失を防ぐ。
  */
 export async function recordTokenUsage(
   serviceClient: SupabaseClient,
@@ -142,18 +143,14 @@ export async function recordTokenUsage(
 
   await resetMonthlyUsageIfNeeded(serviceClient, userId);
 
-  const { data } = await serviceClient
-    .from("user_ai_settings")
-    .select("tokens_used_this_month")
-    .eq("user_id", userId)
-    .maybeSingle();
+  const { error } = await serviceClient.rpc("increment_tokens_used", {
+    p_user_id: userId,
+    p_tokens: totalTokens,
+  });
 
-  const current = data?.tokens_used_this_month ?? 0;
-
-  await serviceClient
-    .from("user_ai_settings")
-    .update({ tokens_used_this_month: current + totalTokens })
-    .eq("user_id", userId);
+  if (error) {
+    console.error("recordTokenUsage failed:", error.message);
+  }
 }
 
 async function checkDailyRateLimit(

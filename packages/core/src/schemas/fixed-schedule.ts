@@ -12,12 +12,9 @@ export const fixedScheduleFormSchema = z
     isEditable: z.boolean().default(false),
   })
   .refine(
-    (data) => {
-      const [sh, sm] = data.startTime.split(":").map(Number);
-      const [eh, em] = data.endTime.split(":").map(Number);
-      return sh * 60 + sm < eh * 60 + em;
-    },
-    { message: "終了時刻は開始時刻より後にしてください" },
+    // 終了が開始以前の場合は日跨ぎ（夜勤等）として扱うため、同時刻のみ拒否する
+    (data) => data.startTime !== data.endTime,
+    { message: "開始時刻と終了時刻は異なる時刻にしてください（終了が開始より前の場合は日跨ぎとして扱います）" },
   );
 
 export type FixedScheduleFormInput = z.infer<typeof fixedScheduleFormSchema>;

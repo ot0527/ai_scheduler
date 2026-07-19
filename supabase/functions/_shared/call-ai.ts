@@ -19,13 +19,18 @@ const DEFAULT_MAX_OUTPUT_TOKENS = 8192;
 const RETRY_USER_HINT =
   "前回の出力が長すぎて JSON が途中で切れました。summary は300文字以内、components 最大10件、workBlocks 最大20件に絞り、JSON のみ返してください。";
 
-function isRetriableAIError(message: string): boolean {
-  return (
-    message.includes("MAX_TOKENS") ||
-    message.includes("途中で切れ") ||
-    message.includes("出力形式が不正") ||
-    message.includes("AI 出力の検証に失敗")
-  );
+/**
+ * AI 呼び出しエラー。retriable が true の場合のみ再試行対象
+ * （出力途切れ・JSON 不正・スキーマ検証失敗など、再実行で解消しうるもの）。
+ */
+export class AIError extends Error {
+  readonly retriable: boolean;
+
+  constructor(message: string, options?: { retriable?: boolean }) {
+    super(message);
+    this.name = "AIError";
+    this.retriable = options?.retriable ?? false;
+  }
 }
 
 /**
@@ -48,7 +53,7 @@ async function callOpenAI<T>(
     body: JSON.stringify({
       model,
       response_format: { type: "json_object" },
-      max_tokens: options?.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
+      max_completion_tokens: options?.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
       messages: [
         { role: "system", content: systemInstruction },
         {
@@ -63,26 +68,28 @@ async function callOpenAI<T>(
   if (!response.ok) {
     const body = await response.text();
     console.error(`OpenAI API error: ${response.status}`, body.slice(0, 500));
-    throw new Error("OpenAI API の呼び出しに失敗しました");
+    throw new AIError("OpenAI API の呼び出しに失敗しました");
   }
 
   const json = await response.json();
   const content = json.choices?.[0]?.message?.content;
   const finishReason = json.choices?.[0]?.finish_reason;
-  if (!content) throw new Error("OpenAI response is empty");
-
+  // トークン上限は本文の有無より先に判定する（本文なしで途切れた場合も再試行対象）
   if (finishReason === "length") {
-    throw new Error(
+    throw new AIError(
       "OpenAI の出力が途中で切れました（トークン上限）。もう一度お試しください。",
+      { retriable: true },
     );
   }
+
+  if (!content) throw new AIError("OpenAI response is empty");
 
   let parsedJson: unknown;
   try {
     parsedJson = JSON.parse(content);
   } catch {
     console.error("OpenAI returned invalid JSON");
-    throw new Error("OpenAI の出力形式が不正です");
+    throw new AIError("OpenAI の出力形式が不正です", { retriable: true });
   }
 
   if (options?.preprocess) parsedJson = options.preprocess(parsedJson);
@@ -90,7 +97,7 @@ async function callOpenAI<T>(
   const parsed = responseSchema.safeParse(parsedJson);
   if (!parsed.success) {
     console.error("AI output validation failed:", parsed.error.message);
-    throw new Error("AI 出力の検証に失敗しました");
+    throw new AIError("AI 出力の検証に失敗しました", { retriable: true });
   }
 
   return {
@@ -114,7 +121,8 @@ async function callGemini<T>(
   responseSchema: z.ZodType<T>,
   options?: CallAIOptions,
 ): Promise<CallAIResult<T>> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+  // API キーは URL ではなくヘッダーで渡す（アクセスログへの漏洩防止）
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
   const generationConfig: Record<string, unknown> = {
     responseMimeType: "application/json",
@@ -127,7 +135,7 @@ async function callGemini<T>(
 
   const response = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: systemInstruction }] },
       contents: [
@@ -147,7 +155,7 @@ async function callGemini<T>(
   if (!response.ok) {
     const body = await response.text();
     console.error(`Gemini API error: ${response.status}`, body.slice(0, 500));
-    throw new Error("Gemini API の呼び出しに失敗しました");
+    throw new AIError("Gemini API の呼び出しに失敗しました");
   }
 
   const json = await response.json();
@@ -155,18 +163,21 @@ async function callGemini<T>(
   const content = candidate?.content?.parts?.[0]?.text;
   const finishReason = candidate?.finishReason;
 
+  // MAX_TOKENS は本文の有無より先に判定する。
+  // 本文なしで途切れた場合も再試行対象（本文有無を先に見ると retriable=false になる回帰）
+  if (finishReason === "MAX_TOKENS") {
+    throw new AIError(
+      "Gemini の出力が途中で切れました（MAX_TOKENS）。もう一度お試しください。",
+      { retriable: true },
+    );
+  }
+
   if (!content) {
     const reason =
       finishReason ??
       json.promptFeedback?.blockReason ??
       "UNKNOWN";
-    throw new Error(`Gemini response is empty (${reason})`);
-  }
-
-  if (finishReason === "MAX_TOKENS") {
-    throw new Error(
-      "Gemini の出力が途中で切れました（MAX_TOKENS）。もう一度お試しください。",
-    );
+    throw new AIError(`Gemini response is empty (${reason})`);
   }
 
   let parsedJson: unknown;
@@ -174,7 +185,7 @@ async function callGemini<T>(
     parsedJson = JSON.parse(content);
   } catch {
     console.error("Gemini returned invalid JSON");
-    throw new Error("Gemini の出力形式が不正です");
+    throw new AIError("Gemini の出力形式が不正です", { retriable: true });
   }
 
   if (options?.preprocess) parsedJson = options.preprocess(parsedJson);
@@ -182,7 +193,7 @@ async function callGemini<T>(
   const parsed = responseSchema.safeParse(parsedJson);
   if (!parsed.success) {
     console.error("AI output validation failed:", parsed.error.message);
-    throw new Error("AI 出力の検証に失敗しました");
+    throw new AIError("AI 出力の検証に失敗しました", { retriable: true });
   }
 
   const usage = json.usageMetadata ?? {};
@@ -233,7 +244,8 @@ export async function callAI<T>(
       lastError =
         error instanceof Error ? error : new Error("AI 呼び出しに失敗しました");
 
-      if (attempt >= maxRetries || !isRetriableAIError(lastError.message)) {
+      const retriable = error instanceof AIError && error.retriable;
+      if (attempt >= maxRetries || !retriable) {
         throw lastError;
       }
     }
@@ -260,7 +272,7 @@ export async function testAIConnection(
       body: JSON.stringify({
         model,
         messages: [{ role: "user", content: "ping" }],
-        max_tokens: 5,
+        max_completion_tokens: 5,
       }),
     });
 
@@ -276,7 +288,7 @@ export async function testAIConnection(
     };
   }
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
   const generationConfig: Record<string, unknown> = { maxOutputTokens: 5 };
   if (!model.startsWith("gemini-3.5")) {
     generationConfig.temperature = 0.2;
@@ -284,7 +296,7 @@ export async function testAIConnection(
 
   const response = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
     body: JSON.stringify({
       contents: [{ role: "user", parts: [{ text: "ping" }] }],
       generationConfig,

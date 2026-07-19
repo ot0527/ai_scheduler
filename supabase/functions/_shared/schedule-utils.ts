@@ -294,13 +294,6 @@ export async function runMinorReschedule(
     throw new Error("再配置先の空き時間が見つかりませんでした");
   }
 
-  for (const placement of plan.placements) {
-    await client
-      .from("scheduled_blocks")
-      .update({ status: "rescheduled" })
-      .eq("id", placement.candidate.sourceBlockId);
-  }
-
   const results: Array<{ targetDate: string; scheduleId: string; blockCount: number }> =
     [];
 
@@ -310,6 +303,10 @@ export async function runMinorReschedule(
     list.push(placement);
     placementsByDate.set(placement.targetDateKey, list);
   }
+
+  // 実際に再配置先へ保存できた placement のみ後で rescheduled 化する
+  // （承認済み日はスキップされるため、先に元ブロックを更新すると作業が消失する）
+  const appliedPlacements: typeof plan.placements = [];
 
   for (const [targetDateKey, datePlacements] of placementsByDate) {
     const { data: existing } = await client
@@ -368,14 +365,29 @@ export async function runMinorReschedule(
       scheduleId: scheduleId!,
       blockCount: blockRows.length,
     });
+    appliedPlacements.push(...datePlacements);
   }
+
+  for (const placement of appliedPlacements) {
+    await client
+      .from("scheduled_blocks")
+      .update({ status: "rescheduled" })
+      .eq("id", placement.candidate.sourceBlockId);
+  }
+
+  const skippedPlacements = plan.placements.filter(
+    (placement) => !appliedPlacements.includes(placement),
+  );
 
   return {
     sourceDate: sourceDateKey,
-    placedCount: plan.placements.length,
-    unplacedCount: plan.unplaced.length,
+    placedCount: appliedPlacements.length,
+    unplacedCount: plan.unplaced.length + skippedPlacements.length,
     proposals: results,
-    unplaced: plan.unplaced.map((item) => item.title),
+    unplaced: [
+      ...plan.unplaced.map((item) => item.title),
+      ...skippedPlacements.map((item) => item.candidate.title),
+    ],
   };
 }
 
@@ -440,12 +452,20 @@ export async function runBudgetCalculation(
     if (error) throw new Error(error.message);
   }
 
-  if (result.shortageMinutes > 0) {
-    await client.from("alerts").delete().eq("user_id", userId).eq("is_read", false);
+  // 週次不足アラートのみ種別で識別して入れ替える（他種別のアラートは残す）。
+  // 不足が解消した場合も、残っている古い不足警告を削除する必要がある。
+  await client
+    .from("alerts")
+    .delete()
+    .eq("user_id", userId)
+    .eq("is_read", false)
+    .eq("kind", "weekly_shortage");
 
+  if (result.shortageMinutes > 0) {
     await client.from("alerts").insert({
       user_id: userId,
       goal_id: null,
+      kind: "weekly_shortage",
       severity: "warning",
       message: `今週の自由時間が不足しています（${Math.ceil(result.shortageMinutes / 60)}時間不足）`,
       suggestions: result.suggestions,

@@ -1,7 +1,6 @@
 import {
-  buildFixedScheduleBlocks,
+  buildFixedScheduleBlocksForDate,
   buildLifeRoutineBlocks,
-  filterFixedSchedulesForDate,
 } from "./block-builders.js";
 import {
   DEFAULT_SLEEP_TIME,
@@ -51,9 +50,8 @@ export function calculateFreeTime(input: FreeTimeInput): FreeTimeResult {
     .filter((routine) => appliesToDate(routine.appliesTo, date))
     .map((routine) => resolveLifeRoutineForDay(routine, dayOverrides));
 
-  const activeFixed = filterFixedSchedulesForDate(fixedSchedules, date);
   const blockedBlocks = [
-    ...buildFixedScheduleBlocks(activeFixed),
+    ...buildFixedScheduleBlocksForDate(fixedSchedules, date),
     ...buildLifeRoutineBlocks(activeRoutines),
   ].sort((a, b) => a.startMinutes - b.startMinutes);
 

@@ -1,4 +1,4 @@
-import { buildScoredCandidates } from "./scoring.js";
+import { buildScoredCandidates, fitBlockDuration } from "./scoring.js";
 import type { FreeTimeResult, FreeTimeSlot } from "./types.js";
 import type {
   GoalBudgetContext,
@@ -44,7 +44,8 @@ export function generateDailyPlacement(
   todayKey: string,
   executionContext?: ScoringExecutionContext,
 ): DailyPlacementResult {
-  const usedSlots = new Set<number>();
+  /** スロットごとの配置済み末尾（次に配置可能な開始分） */
+  const slotCursors = new Map<number, number>();
   const usedTemplates = new Set<string>();
   const usedMinutesByGoal: Record<string, number> = {};
   const blocks: PlacedBlock[] = [];
@@ -54,6 +55,9 @@ export function generateDailyPlacement(
       budget.goalId,
       budget.allocatedMinutes - budget.completedMinutesThisWeek,
     ]),
+  );
+  const templateById = new Map(
+    templates.map((template) => [template.id, template]),
   );
 
   const candidates = buildScoredCandidates(
@@ -66,37 +70,44 @@ export function generateDailyPlacement(
   );
 
   for (const candidate of candidates) {
-    if (usedSlots.has(candidate.slotIndex)) continue;
     if (usedTemplates.has(candidate.templateId)) continue;
 
-    const remaining = remainingBudgetByGoal.get(candidate.goalId) ?? 0;
-    if (remaining < candidate.plannedMinutes) continue;
-
-    const template = templates.find((item) => item.id === candidate.templateId);
+    const template = templateById.get(candidate.templateId);
     if (!template) continue;
 
     const slot = freeTime.freeSlots[candidate.slotIndex];
-    if (!slot || !fitsInSlot(slot, candidate.startMinutes, candidate.endMinutes)) {
-      continue;
-    }
+    if (!slot) continue;
 
-    usedSlots.add(candidate.slotIndex);
+    // スロット内の残り区間（配置済みブロックの後ろ）に収まる分数を再計算する
+    const cursor = slotCursors.get(candidate.slotIndex) ?? slot.startMinutes;
+    const remainingSlot: FreeTimeSlot = {
+      startMinutes: cursor,
+      endMinutes: slot.endMinutes,
+      durationMinutes: slot.endMinutes - cursor,
+    };
+    const plannedMinutes = fitBlockDuration(remainingSlot, template);
+    if (plannedMinutes === 0) continue;
+
+    const remaining = remainingBudgetByGoal.get(candidate.goalId) ?? 0;
+    if (remaining < plannedMinutes) continue;
+
+    const startMinutes = cursor;
+    const endMinutes = cursor + plannedMinutes;
+
+    slotCursors.set(candidate.slotIndex, endMinutes);
     usedTemplates.add(candidate.templateId);
     usedMinutesByGoal[candidate.goalId] =
-      (usedMinutesByGoal[candidate.goalId] ?? 0) + candidate.plannedMinutes;
-    remainingBudgetByGoal.set(
-      candidate.goalId,
-      remaining - candidate.plannedMinutes,
-    );
+      (usedMinutesByGoal[candidate.goalId] ?? 0) + plannedMinutes;
+    remainingBudgetByGoal.set(candidate.goalId, remaining - plannedMinutes);
 
     blocks.push({
       workBlockTemplateId: template.id,
       goalId: template.goalId,
       componentId: template.componentId,
       title: template.title,
-      startMinutes: candidate.startMinutes,
-      endMinutes: candidate.endMinutes,
-      plannedMinutes: candidate.plannedMinutes,
+      startMinutes,
+      endMinutes,
+      plannedMinutes,
       orderType: template.orderType,
       score: candidate.score,
     });
@@ -109,10 +120,6 @@ export function generateDailyPlacement(
     .map((template) => template.id);
 
   return { blocks, usedMinutesByGoal, unplacedTemplateIds };
-}
-
-function fitsInSlot(slot: FreeTimeSlot, start: number, end: number): boolean {
-  return start >= slot.startMinutes && end <= slot.endMinutes;
 }
 
 export type { WorkBlockTemplateInput, GoalBudgetContext, ScoringExecutionContext };

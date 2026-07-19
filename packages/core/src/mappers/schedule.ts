@@ -30,6 +30,10 @@ export const SCHEDULE_STATUS_LABELS: Record<ScheduleRow["status"], string> = {
 /**
  * 配置結果を DB 挿入用の scheduled_blocks 行へ変換する。
  *
+ * 就寝が日を跨ぐ場合、終了分が 1440 以上のブロック（例: 23:30〜24:30）は
+ * end_time が翌日時刻（00:30）へ正規化される。DB 制約は start <> end のみで、
+ * end < start の行は日跨ぎとして解釈する（planned_minutes が正しい分数を持つ）。
+ *
  * @param scheduleId - 親スケジュール ID
  * @param blocks - 配置ブロック
  */

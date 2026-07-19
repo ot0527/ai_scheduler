@@ -102,7 +102,6 @@ export function ReviewPage() {
         scheduleId: schedule.schedule.id,
         goalId: block.goal_id,
         plannedMinutes: block.planned_minutes,
-        previousActualMinutes: block.actual_minutes,
         status,
         actualMinutes,
         targetDate: schedule.schedule.target_date,
